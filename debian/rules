@@ -19,7 +19,7 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/brainrotfilter/usr/share/brainrotfilter/www/static/js
 	install -d $(CURDIR)/debian/brainrotfilter/usr/lib/brainrotfilter/scripts
 	install -d $(CURDIR)/debian/brainrotfilter/etc/squid/conf.d
-	install -d $(CURDIR)/debian/brainrotfilter/lib/systemd/system
+	install -d $(CURDIR)/debian/brainrotfilter/usr/lib/systemd/system
 
 	# Install Python source
 	install -m 644 $(CURDIR)/src/brainrotfilter/*.py \
@@ -59,7 +59,7 @@ override_dh_auto_install:
 
 	# Install systemd service
 	install -m 644 $(CURDIR)/debian/brainrotfilter.service \
-		$(CURDIR)/debian/brainrotfilter/lib/systemd/system/
+		$(CURDIR)/debian/brainrotfilter/usr/lib/systemd/system/
 
 override_dh_auto_test:
 	@echo "Skipping tests during package build"
