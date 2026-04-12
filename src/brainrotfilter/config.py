@@ -70,7 +70,7 @@ DEFAULTS: Dict[str, Any] = {
     # Community keyword sync
     "community_keywords_enabled": False,
     "community_keywords_url": (
-        "https://raw.githubusercontent.com/IAmDestructoman/pfSense-pkg-BrainrotFilter"
+        "https://raw.githubusercontent.com/IAmDestructoman/brainrotfilter-deb"
         "/main/community-keywords.json"
     ),
     "community_keywords_branch": "main",
@@ -350,9 +350,9 @@ class Config:
         return self.get_str("youtube_api_key")
 
     @property
-    def pfsense_ip(self) -> str:
-        """Backward-compatible alias; on Linux this is the gateway IP."""
-        return self.get_str("gateway_ip") or self.get_str("pfsense_ip")
+    def service_host(self) -> str:
+        """Return the host IP for redirect URLs (gateway or service host)."""
+        return self.get_str("gateway_ip") or self.get_str("service_host") or "127.0.0.1"
 
     @property
     def analyzer_service_url(self) -> str:

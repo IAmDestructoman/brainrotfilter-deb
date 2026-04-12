@@ -3,8 +3,7 @@ linux_configurator.py
 =====================
 Local Linux system configurator for BrainrotFilter.
 
-Replaces pfsense_configurator.py -- instead of SSH-ing to a remote pfSense box,
-this module configures the local Linux machine directly:
+Configures the local Linux system for transparent proxy filtering.
   - Generate self-signed CA using openssl
   - Configure Squid with SSL bump (peek/stare/bump for YouTube, splice rest)
   - Setup iptables REDIRECT rules for transparent proxy

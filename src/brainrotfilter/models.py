@@ -316,7 +316,7 @@ class Settings(BaseModel):
     full_scan_time_limit: int = 120
 
     youtube_api_key: str = ""
-    pfsense_ip: str = "192.168.1.1"
+    gateway_ip: str = ""
     analyzer_service_url: str = "http://127.0.0.1:8199"
     service_port: int = 8199
     squid_port: int = 3128

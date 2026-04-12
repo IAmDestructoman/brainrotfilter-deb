@@ -3,8 +3,7 @@ wizard_routes.py
 ================
 FastAPI router for the BrainrotFilter setup wizard (Linux/Debian version).
 
-Unlike the pfSense version, this wizard configures the LOCAL Linux system
-directly -- no SSH/REST connection to a remote firewall needed.
+This wizard configures the local Linux system for transparent proxy filtering.
 
 Endpoints
 ---------

@@ -5,7 +5,7 @@ Kills active TCP/UDP connections for a client IP that is currently streaming
 a YouTube/Google Video CDN connection, forcing the video to stop immediately
 after a block decision has been made mid-stream.
 
-Uses conntrack (netfilter connection tracking) instead of pfctl.
+Uses conntrack (netfilter connection tracking) for connection state management.
 
 Safety constraints:
   - Only kills connections where the DESTINATION is a known YouTube/Google CDN IP range

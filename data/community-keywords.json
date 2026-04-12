@@ -270,7 +270,7 @@
   "metadata": {
     "total_categories": 5,
     "description": "Community-maintained brainrot detection keyword list for BrainrotFilter. All contributions are reviewed before merging. Each keyword has a weight from 1-10 indicating brainrot signal strength.",
-    "contribution_guide": "https://github.com/IAmDestructoman/pfSense-pkg-BrainrotFilter/blob/main/CONTRIBUTING.md",
+    "contribution_guide": "https://github.com/IAmDestructoman/brainrotfilter-deb/blob/main/CONTRIBUTING.md",
     "notes": [
       "Weights 8-10: very strong brainrot signal (skibidi, rizz compilations)",
       "Weights 5-7: moderate signal (common slang, compilation tags)",

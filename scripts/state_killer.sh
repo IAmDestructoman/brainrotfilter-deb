@@ -5,7 +5,7 @@
 # ranges. This terminates in-progress video streams immediately after a block
 # decision.
 #
-# Uses conntrack (netfilter connection tracking) instead of pfctl.
+# Uses conntrack (netfilter connection tracking) for connection state management.
 #
 # Usage: state_killer.sh <client_ip>
 

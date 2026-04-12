@@ -55,7 +55,7 @@ PENDING_SUBMISSIONS_PATH = os.environ.get(
 )
 
 _DEFAULT_COMMUNITY_URL = (
-    "https://raw.githubusercontent.com/IAmDestructoman/pfSense-pkg-BrainrotFilter"
+    "https://raw.githubusercontent.com/IAmDestructoman/brainrotfilter-deb"
     "/main/community-keywords.json"
 )
 

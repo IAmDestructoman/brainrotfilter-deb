@@ -173,7 +173,7 @@ def _make_decision(video_id: str, client_ip: str, user_agent: str) -> Tuple[str,
       action:       "allow" | "soft_block" | "block"
       redirect_url: URL to redirect to, or "" for pass-through
     """
-    pfsense_ip = config.pfsense_ip
+    service_host = config.service_host
     service_port = config.service_port
 
     # 1. Check whitelist
@@ -184,11 +184,11 @@ def _make_decision(video_id: str, client_ip: str, user_agent: str) -> Tuple[str,
     status = db.get_video_status(video_id)
 
     if status == "block":
-        redirect = f"http://{pfsense_ip}:{service_port}/blocked?video_id={video_id}"
+        redirect = f"http://{service_host}:{service_port}/blocked?video_id={video_id}"
         return "block", redirect
 
     if status == "soft_block":
-        redirect = f"http://{pfsense_ip}:{service_port}/warning?video_id={video_id}"
+        redirect = f"http://{service_host}:{service_port}/warning?video_id={video_id}"
         return "soft_block", redirect
 
     # 3. Check channel-level block (we don't know channel_id here, so
@@ -201,13 +201,13 @@ def _make_decision(video_id: str, client_ip: str, user_agent: str) -> Tuple[str,
                 ch_tier = db.get_channel_tier(ch_id)
                 if ch_tier == "block":
                     redirect = (
-                        f"http://{pfsense_ip}:{service_port}/blocked"
+                        f"http://{service_host}:{service_port}/blocked"
                         f"?video_id={video_id}&channel_id={ch_id}&reason=channel"
                     )
                     return "block", redirect
                 if ch_tier == "soft_block":
                     redirect = (
-                        f"http://{pfsense_ip}:{service_port}/warning"
+                        f"http://{service_host}:{service_port}/warning"
                         f"?video_id={video_id}&channel_id={ch_id}&reason=channel"
                     )
                     return "soft_block", redirect

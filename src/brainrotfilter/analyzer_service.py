@@ -548,7 +548,7 @@ async def api_check(req: CheckRequest) -> CheckResponse:
     Fast block check for Squid.
     Checks both video_id and channel_id against the DB.
     """
-    pfsense_ip = config.pfsense_ip or "127.0.0.1"
+    service_host = config.service_host
     port = config.service_port
 
     if req.video_id:
@@ -561,14 +561,14 @@ async def api_check(req: CheckRequest) -> CheckResponse:
             return CheckResponse(
                 action="block",
                 video_id=vid,
-                redirect_url=f"http://{pfsense_ip}:{port}/blocked?video_id={vid}",
+                redirect_url=f"http://{service_host}:{port}/blocked?video_id={vid}",
                 reason="blocked",
             )
         if status == "soft_block":
             return CheckResponse(
                 action="soft_block",
                 video_id=vid,
-                redirect_url=f"http://{pfsense_ip}:{port}/warning?video_id={vid}",
+                redirect_url=f"http://{service_host}:{port}/warning?video_id={vid}",
                 reason="soft_blocked",
             )
 
@@ -582,14 +582,14 @@ async def api_check(req: CheckRequest) -> CheckResponse:
             return CheckResponse(
                 action="block",
                 channel_id=ch,
-                redirect_url=f"http://{pfsense_ip}:{port}/blocked?channel_id={ch}&reason=channel",
+                redirect_url=f"http://{service_host}:{port}/blocked?channel_id={ch}&reason=channel",
                 reason="channel_blocked",
             )
         if tier == "soft_block":
             return CheckResponse(
                 action="soft_block",
                 channel_id=ch,
-                redirect_url=f"http://{pfsense_ip}:{port}/warning?channel_id={ch}&reason=channel",
+                redirect_url=f"http://{service_host}:{port}/warning?channel_id={ch}&reason=channel",
                 reason="channel_soft_blocked",
             )
 

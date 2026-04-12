@@ -1158,7 +1158,7 @@ def _persist_result(
 ) -> None:
     """
     Compute the combined score, build a VideoAnalysis record, and persist it
-    to the database.  Also updates ACL files, kills pfSense states if needed,
+    to the database.  Also updates ACL files, kills connection states if needed,
     and updates the channel profile.
 
     Called by both the normal and early-exit code paths.
@@ -1244,7 +1244,7 @@ def _persist_result(
     except Exception as exc:
         logger.error("ACL update failed after analysis of %s: %s", video_id, exc)
 
-    # Kill active pfSense states if the video is blocked
+    # Kill active connection states if the video is blocked
     if status_str in ("block", "soft_block"):
         try:
             from state_killer import kill_states_for_video  # noqa: PLC0415
