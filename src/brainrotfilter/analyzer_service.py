@@ -548,7 +548,7 @@ async def api_check(req: CheckRequest) -> CheckResponse:
     Fast block check for Squid.
     Checks both video_id and channel_id against the DB.
     """
-    pfsense_ip = config.pfsense_ip
+    pfsense_ip = config.pfsense_ip or "127.0.0.1"
     port = config.service_port
 
     if req.video_id:
