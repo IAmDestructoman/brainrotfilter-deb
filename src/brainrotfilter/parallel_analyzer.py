@@ -595,7 +595,7 @@ def _phase1_5_thumbnail_analysis(
     try:
         import thumbnail_analyzer  # type: ignore
         result = thumbnail_analyzer.analyze(
-            image_path=thumb_path,
+            thumbnail_url=thumbnail_url,
             video_id=video_id,
         )
         return float(result.score), result.details or {}
