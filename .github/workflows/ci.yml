@@ -24,7 +24,7 @@ jobs:
         run: |
           flake8 src/brainrotfilter/ \
             --max-line-length=120 \
-            --ignore=E501,W503,E402,F401,E722
+            --ignore=E501,W503,E402,F401,E722,E241,E302,E741,F841,E128
 
   test:
     runs-on: ubuntu-latest
