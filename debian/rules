@@ -17,7 +17,7 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/brainrotfilter/usr/share/brainrotfilter/www/templates
 	install -d $(CURDIR)/debian/brainrotfilter/usr/share/brainrotfilter/www/static/css
 	install -d $(CURDIR)/debian/brainrotfilter/usr/share/brainrotfilter/www/static/js
-	install -d $(CURDIR)/debian/brainrotfilter/usr/local/bin/brainrotfilter
+	install -d $(CURDIR)/debian/brainrotfilter/usr/lib/brainrotfilter/scripts
 	install -d $(CURDIR)/debian/brainrotfilter/etc/squid/conf.d
 	install -d $(CURDIR)/debian/brainrotfilter/lib/systemd/system
 
@@ -47,11 +47,11 @@ override_dh_auto_install:
 
 	# Install shell scripts
 	install -m 755 $(CURDIR)/scripts/squid_redirector.sh \
-		$(CURDIR)/debian/brainrotfilter/usr/local/bin/brainrotfilter/
+		$(CURDIR)/debian/brainrotfilter/usr/lib/brainrotfilter/scripts/
 	install -m 755 $(CURDIR)/scripts/squid_acl_helper.sh \
-		$(CURDIR)/debian/brainrotfilter/usr/local/bin/brainrotfilter/
+		$(CURDIR)/debian/brainrotfilter/usr/lib/brainrotfilter/scripts/
 	install -m 755 $(CURDIR)/scripts/state_killer.sh \
-		$(CURDIR)/debian/brainrotfilter/usr/local/bin/brainrotfilter/
+		$(CURDIR)/debian/brainrotfilter/usr/lib/brainrotfilter/scripts/
 
 	# Install Squid config snippet
 	install -m 644 $(CURDIR)/debian/brainrotfilter-squid.conf \

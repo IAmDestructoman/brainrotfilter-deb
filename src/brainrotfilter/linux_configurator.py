@@ -33,7 +33,7 @@ LOG_DIR = Path("/var/log/brainrotfilter")
 CA_DIR = CONFIG_DIR / "ssl"
 SQUID_CONF_DIR = Path("/etc/squid")
 SQUID_SSL_DB = Path("/var/lib/squid/ssl_db")
-SCRIPTS_DIR = Path("/usr/local/bin/brainrotfilter")
+SCRIPTS_DIR = Path("/usr/lib/brainrotfilter/scripts")
 
 # YouTube domains for Squid ACLs
 YOUTUBE_DOMAINS = [

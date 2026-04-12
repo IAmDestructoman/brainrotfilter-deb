@@ -9,7 +9,7 @@ Protocol (Squid external_acl_type):
 
 Squid configuration:
   external_acl_type brainrot_check ttl=60 concurrency=10 \
-      %SRC %URI /usr/local/bin/brainrotfilter/squid_acl_helper.py
+      %SRC %URI /usr/lib/brainrotfilter/scripts/squid_acl_helper.py
 
   acl brainrot_blocked external brainrot_check
   http_access deny brainrot_blocked

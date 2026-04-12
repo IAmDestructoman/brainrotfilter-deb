@@ -179,7 +179,7 @@ async def _stream_uninstall(
         )
         await asyncio.sleep(0.1)
         try:
-            scripts_dir = Path("/usr/local/bin/brainrotfilter")
+            scripts_dir = Path("/usr/lib/brainrotfilter/scripts")
             if scripts_dir.exists():
                 import shutil
                 shutil.rmtree(scripts_dir)

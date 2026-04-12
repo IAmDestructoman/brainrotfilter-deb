@@ -2,7 +2,7 @@
 # BrainrotFilter -- Squid External ACL Helper (POSIX shell, Linux)
 #
 # Squid config:
-#   external_acl_type brainrot_check ttl=60 %URI /usr/local/bin/brainrotfilter/squid_acl_helper.sh
+#   external_acl_type brainrot_check ttl=60 %URI /usr/lib/brainrotfilter/scripts/squid_acl_helper.sh
 #   acl brainrot_blocked external brainrot_check
 #   http_access deny brainrot_blocked
 #

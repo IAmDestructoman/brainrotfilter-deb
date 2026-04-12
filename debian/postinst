@@ -34,7 +34,7 @@ case "$1" in
         chmod 750 /var/lib/brainrotfilter
         chmod 750 /var/log/brainrotfilter
         chmod 750 /etc/brainrotfilter
-        chmod 755 /usr/local/bin/brainrotfilter/*.sh
+        chmod 755 /usr/lib/brainrotfilter/scripts/*.sh
 
         # Enable and start the service
         systemctl daemon-reload

@@ -2,7 +2,7 @@
 # BrainrotFilter -- Squid URL Rewrite Program (POSIX shell, Linux)
 #
 # Squid config:
-#   url_rewrite_program /usr/local/bin/brainrotfilter/squid_redirector.sh
+#   url_rewrite_program /usr/lib/brainrotfilter/scripts/squid_redirector.sh
 #   url_rewrite_children 5 startup=2 idle=1 concurrency=0
 #
 # Protocol (input):   <ID> <URL> <client_ip>/<fqdn> <ident> <method> [kvpairs]

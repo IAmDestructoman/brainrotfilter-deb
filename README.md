@@ -78,7 +78,7 @@ Client -> iptables REDIRECT -> Squid (SSL bump) -> BrainrotFilter API -> YouTube
 - **Service config**: `/etc/brainrotfilter/`
 - **Database**: `/var/lib/brainrotfilter/brainrotfilter.db`
 - **Logs**: `/var/log/brainrotfilter/`
-- **Shell helpers**: `/usr/local/bin/brainrotfilter/`
+- **Shell helpers**: `/usr/lib/brainrotfilter/scripts/`
 - **Web assets**: `/usr/share/brainrotfilter/www/`
 - **Systemd service**: `brainrotfilter.service`
 
