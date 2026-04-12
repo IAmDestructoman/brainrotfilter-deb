@@ -347,8 +347,7 @@ def _phase1_metadata_and_keywords(video_id: str) -> Dict[str, Any]:
                 import comment_analyzer  # type: ignore
                 result = comment_analyzer.analyze(
                     video_id=video_id,
-                    title=title,
-                    description=description,
+                    api_key=config.get_str("youtube_api_key"),
                 )
                 return float(result.score), result.details or {}
             except ImportError:
@@ -365,13 +364,14 @@ def _phase1_metadata_and_keywords(video_id: str) -> Dict[str, Any]:
                 import engagement_analyzer  # type: ignore
                 result = engagement_analyzer.analyze(
                     video_id=video_id,
-                    view_count=view_count,
-                    like_count=like_count,
-                    comment_count=comment_count,
-                    duration_seconds=duration_seconds,
-                    title=title,
-                    description=description,
-                    category_id=category_id,
+                    video_data={
+                        "view_count": view_count,
+                        "like_count": like_count,
+                        "comment_count": comment_count,
+                        "duration": duration_seconds,
+                        "title": title,
+                        "published_at": (yt_data or {}).get("published_at", ""),
+                    },
                 )
                 return float(result.score), result.details or {}
             except ImportError:
