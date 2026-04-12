@@ -204,6 +204,18 @@ class DatabaseManager:
         audio_json = json.dumps(
             video.audio_details.model_dump() if video.audio_details else {}
         )
+        comment_json = json.dumps(
+            video.comment_details.model_dump() if video.comment_details else {}
+        )
+        engagement_json = json.dumps(
+            video.engagement_details.model_dump() if video.engagement_details else {}
+        )
+        thumbnail_json = json.dumps(
+            video.thumbnail_details.model_dump() if video.thumbnail_details else {}
+        )
+        shorts_json = json.dumps(
+            video.shorts_details.model_dump() if video.shorts_details else {}
+        )
         now = self._now()
 
         with _get_conn(self.db_path) as conn:
@@ -212,31 +224,43 @@ class DatabaseManager:
                 INSERT INTO videos (
                     video_id, channel_id, title, description, thumbnail_url,
                     keyword_score, scene_score, audio_score, combined_score, status,
+                    comment_score, engagement_score, thumbnail_score, shorts_score,
                     matched_keywords, scene_details, audio_details,
+                    comment_details, engagement_details, thumbnail_details, shorts_details,
                     analyzed_at, updated_at, manual_override, override_by
                 ) VALUES (
                     :video_id, :channel_id, :title, :description, :thumbnail_url,
                     :keyword_score, :scene_score, :audio_score, :combined_score, :status,
+                    :comment_score, :engagement_score, :thumbnail_score, :shorts_score,
                     :matched_keywords, :scene_details, :audio_details,
+                    :comment_details, :engagement_details, :thumbnail_details, :shorts_details,
                     :analyzed_at, :updated_at, :manual_override, :override_by
                 )
                 ON CONFLICT(video_id) DO UPDATE SET
-                    channel_id       = excluded.channel_id,
-                    title            = excluded.title,
-                    description      = excluded.description,
-                    thumbnail_url    = excluded.thumbnail_url,
-                    keyword_score    = excluded.keyword_score,
-                    scene_score      = excluded.scene_score,
-                    audio_score      = excluded.audio_score,
-                    combined_score   = excluded.combined_score,
-                    status           = CASE WHEN videos.manual_override = 1
-                                           THEN videos.status
-                                           ELSE excluded.status END,
-                    matched_keywords = excluded.matched_keywords,
-                    scene_details    = excluded.scene_details,
-                    audio_details    = excluded.audio_details,
-                    analyzed_at      = excluded.analyzed_at,
-                    updated_at       = excluded.updated_at
+                    channel_id          = excluded.channel_id,
+                    title               = excluded.title,
+                    description         = excluded.description,
+                    thumbnail_url       = excluded.thumbnail_url,
+                    keyword_score       = excluded.keyword_score,
+                    scene_score         = excluded.scene_score,
+                    audio_score         = excluded.audio_score,
+                    combined_score      = excluded.combined_score,
+                    status              = CASE WHEN videos.manual_override = 1
+                                               THEN videos.status
+                                               ELSE excluded.status END,
+                    comment_score       = excluded.comment_score,
+                    engagement_score    = excluded.engagement_score,
+                    thumbnail_score     = excluded.thumbnail_score,
+                    shorts_score        = excluded.shorts_score,
+                    matched_keywords    = excluded.matched_keywords,
+                    scene_details       = excluded.scene_details,
+                    audio_details       = excluded.audio_details,
+                    comment_details     = excluded.comment_details,
+                    engagement_details  = excluded.engagement_details,
+                    thumbnail_details   = excluded.thumbnail_details,
+                    shorts_details      = excluded.shorts_details,
+                    analyzed_at         = excluded.analyzed_at,
+                    updated_at          = excluded.updated_at
                 """,
                 {
                     "video_id": video.video_id,
@@ -249,9 +273,17 @@ class DatabaseManager:
                     "audio_score": video.audio_score,
                     "combined_score": video.combined_score,
                     "status": video.status if isinstance(video.status, str) else video.status.value,
+                    "comment_score": video.comment_score,
+                    "engagement_score": video.engagement_score,
+                    "thumbnail_score": video.thumbnail_score,
+                    "shorts_score": video.shorts_score,
                     "matched_keywords": matched_kw_json,
                     "scene_details": scene_json,
                     "audio_details": audio_json,
+                    "comment_details": comment_json,
+                    "engagement_details": engagement_json,
+                    "thumbnail_details": thumbnail_json,
+                    "shorts_details": shorts_json,
                     "analyzed_at": video.analyzed_at.isoformat() if video.analyzed_at else now,
                     "updated_at": now,
                     "manual_override": int(video.manual_override),

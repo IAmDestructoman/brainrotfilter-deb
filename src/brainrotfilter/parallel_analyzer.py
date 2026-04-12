@@ -1182,7 +1182,11 @@ def _persist_result(
     status_str = config.score_to_status(combined_score)
 
     # Build keyword match objects
-    from models import KeywordMatch as _KM, SceneDetails as _SD, AudioDetails as _AD  # noqa: PLC0415
+    from models import (  # noqa: PLC0415
+        KeywordMatch as _KM, SceneDetails as _SD, AudioDetails as _AD,
+        CommentDetails as _CD, EngagementDetails as _ED,
+        ThumbnailDetails as _TD, ShortsDetails as _ShD,
+    )
 
     matched_kw_objects: List[Any] = []
     for kw in phase1.get("keyword_matches", []):
@@ -1222,10 +1226,18 @@ def _persist_result(
         scene_score=scene_score,
         audio_score=audio_score,
         combined_score=combined_score,
+        comment_score=comment_score,
+        engagement_score=engagement_score,
+        thumbnail_score=thumbnail_score,
+        shorts_score=shorts_bonus,
         status=VideoStatus(status_str),
         matched_keywords=matched_kw_objects,
         scene_details=_safe_model(_SD, scene_details),
         audio_details=_safe_model(_AD, audio_details),
+        comment_details=_safe_model(_CD, phase1.get("comment_details", {})),
+        engagement_details=_safe_model(_ED, phase1.get("engagement_details", {})),
+        thumbnail_details=_safe_model(_TD, thumbnail_details or {}),
+        shorts_details=_safe_model(_ShD, phase1.get("shorts_details", {})),
         analyzed_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
     )
