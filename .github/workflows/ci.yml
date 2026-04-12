@@ -50,3 +50,6 @@ jobs:
           python -m pytest tests/ -v --tb=short
         env:
           BRAINROT_WIZARD_SKIP: "1"
+          BRAINROT_DB_PATH: /tmp/brainrotfilter_test.db
+          BRAINROT_CONFIG_DIR: /tmp/brainrotfilter_test_config
+          BRAINROT_DATA_DIR: /tmp/brainrotfilter_test_data

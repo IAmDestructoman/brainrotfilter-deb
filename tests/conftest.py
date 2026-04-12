@@ -108,7 +108,7 @@ def db_manager(temp_db: Path):
     from db_manager import DatabaseManager
 
     manager = DatabaseManager(db_path=str(temp_db))
-    manager._init_db()
+    manager.initialize()
     yield manager
 
 
