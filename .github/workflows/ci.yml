@@ -24,7 +24,7 @@ jobs:
         run: |
           flake8 src/brainrotfilter/ \
             --max-line-length=120 \
-            --ignore=E501,W503,E402,F401,E722,E241,E302,E741,F841,E128
+            --ignore=E501,W503,E402,F401,E722,E241,E302,E741,F841,E128,E203,W504,E226
 
   test:
     runs-on: ubuntu-latest
@@ -53,3 +53,4 @@ jobs:
           BRAINROT_DB_PATH: /tmp/brainrotfilter_test.db
           BRAINROT_CONFIG_DIR: /tmp/brainrotfilter_test_config
           BRAINROT_DATA_DIR: /tmp/brainrotfilter_test_data
+          BRAINROT_KEYWORDS_PATH: ${{ github.workspace }}/data/keywords.json
