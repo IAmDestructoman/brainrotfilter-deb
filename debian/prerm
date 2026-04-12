@@ -1,0 +1,40 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+    remove|purge)
+        # Stop and disable the service
+        if systemctl is-active --quiet brainrotfilter.service 2>/dev/null; then
+            systemctl stop brainrotfilter.service || true
+        fi
+        systemctl disable brainrotfilter.service 2>/dev/null || true
+
+        echo ""
+        echo "BrainrotFilter service stopped."
+        echo ""
+        echo "Note: iptables rules and Squid configuration are NOT"
+        echo "automatically removed. To fully uninstall, use the"
+        echo "web admin panel's Uninstall page before removing the"
+        echo "package, or run the uninstall manually."
+        echo ""
+        ;;
+
+    upgrade|deconfigure)
+        # Stop service before upgrade
+        if systemctl is-active --quiet brainrotfilter.service 2>/dev/null; then
+            systemctl stop brainrotfilter.service || true
+        fi
+        ;;
+
+    failed-upgrade)
+        ;;
+
+    *)
+        echo "prerm called with unknown argument: $1" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

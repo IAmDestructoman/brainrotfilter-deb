@@ -1,0 +1,43 @@
+[Unit]
+Description=BrainrotFilter YouTube Content Filter
+Documentation=https://github.com/IAmDestructoman/brainrotfilter-deb
+After=network-online.target squid.service
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=brainrotfilter
+Group=brainrotfilter
+WorkingDirectory=/opt/brainrotfilter
+
+ExecStart=/opt/brainrotfilter/venv/bin/uvicorn \
+    brainrotfilter.analyzer_service:app \
+    --host 0.0.0.0 \
+    --port 8199 \
+    --workers 1 \
+    --app-dir /opt/brainrotfilter/src
+
+Restart=on-failure
+RestartSec=5
+
+# Environment
+Environment=PYTHONPATH=/opt/brainrotfilter/src/brainrotfilter
+Environment=BRAINROT_DB_PATH=/var/lib/brainrotfilter/brainrotfilter.db
+Environment=BRAINROT_KEYWORDS_PATH=/etc/brainrotfilter/keywords.json
+Environment=BRAINROT_CONFIG_DIR=/etc/brainrotfilter
+Environment=BRAINROT_DATA_DIR=/var/lib/brainrotfilter
+Environment=BRAINROT_WWW_DIR=/usr/share/brainrotfilter/www
+Environment=BRAINROT_LOG_DIR=/var/log/brainrotfilter
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/brainrotfilter /var/log/brainrotfilter /etc/brainrotfilter
+PrivateTmp=true
+
+# Resource limits
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

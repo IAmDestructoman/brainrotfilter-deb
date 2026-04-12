@@ -1,0 +1,357 @@
+{% extends "base.html" %}
+
+{% block title %}Uninstall{% endblock %}
+{% block page_title %}Uninstall BrainrotFilter{% endblock %}
+
+{% block head %}
+<style>
+.uninstall-card {
+  background: var(--card-bg, #1a2332);
+  border: 1px solid rgba(239,68,68,0.2);
+  border-radius: 12px;
+  padding: 28px;
+  max-width: 720px;
+  margin: 0 auto;
+}
+.warning-banner {
+  background: rgba(239,68,68,0.1);
+  border: 1px solid rgba(239,68,68,0.3);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 24px;
+  color: #ef4444;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.warning-banner strong { display: block; margin-bottom: 4px; font-size: 15px; }
+.status-checklist { list-style: none; padding: 0; margin: 0 0 24px; }
+.status-checklist li {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+  font-size: 14px;
+}
+.status-checklist li:last-child { border-bottom: none; }
+.status-icon {
+  width: 24px; height: 24px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; flex-shrink: 0;
+}
+.status-icon.found { background: rgba(239,68,68,0.15); color: #ef4444; }
+.status-icon.clean { background: rgba(34,197,94,0.15); color: #22c55e; }
+.status-icon.loading { background: rgba(100,116,139,0.15); color: #94a3b8; }
+.btn-danger {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 12px 24px; border: none; border-radius: 8px;
+  font-size: 15px; font-weight: 600; cursor: pointer;
+  background: #ef4444; color: #fff; transition: background 0.2s;
+  width: 100%; justify-content: center;
+}
+.btn-danger:hover { background: #dc2626; }
+.btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-secondary {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 20px; border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px; font-size: 14px; font-weight: 600;
+  cursor: pointer; background: transparent; color: #e2e8f0;
+  transition: all 0.2s;
+}
+.btn-secondary:hover { border-color: rgba(0,180,216,0.5); }
+.btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+/* Progress steps */
+.progress-steps { margin-top: 20px; }
+.progress-step {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; border-radius: 8px; margin-bottom: 6px;
+  background: rgba(255,255,255,0.02); font-size: 14px;
+  transition: background 0.3s;
+}
+.progress-step.running { background: rgba(0,180,216,0.08); }
+.progress-step.done { background: rgba(34,197,94,0.06); }
+.progress-step.error { background: rgba(239,68,68,0.08); }
+.progress-step.warning { background: rgba(245,158,11,0.08); }
+.progress-step-icon {
+  width: 24px; height: 24px; display: flex;
+  align-items: center; justify-content: center; flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner {
+  width: 18px; height: 18px;
+  border: 2px solid rgba(255,255,255,0.1);
+  border-top-color: #00b4d8;
+  border-radius: 50%; animation: spin 0.8s linear infinite;
+}
+.step-details { margin-top: 6px; }
+.step-details summary {
+  font-size: 12px; color: #64748b; cursor: pointer; user-select: none;
+}
+.step-log {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  background: rgba(0,0,0,0.3); border-radius: 4px; padding: 8px;
+  margin-top: 4px; max-height: 120px; overflow-y: auto; color: #94a3b8;
+  white-space: pre-wrap; word-break: break-all;
+}
+.copy-log-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px; font-size: 12px; font-weight: 600;
+  cursor: pointer; background: transparent; color: #94a3b8;
+  transition: all 0.2s; margin-top: 8px;
+}
+.copy-log-btn:hover { border-color: rgba(0,180,216,0.5); color: #e2e8f0; }
+.complete-banner {
+  text-align: center; padding: 24px; margin-top: 20px;
+  background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.2);
+  border-radius: 8px; display: none;
+}
+.complete-banner.show { display: block; }
+.complete-banner p { color: #22c55e; font-weight: 600; margin-bottom: 8px; }
+.complete-banner small { color: #94a3b8; font-size: 13px; }
+.error-banner {
+  text-align: center; padding: 16px; margin-top: 16px;
+  background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2);
+  border-radius: 8px; display: none; color: #ef4444; font-size: 14px;
+}
+.error-banner.show { display: block; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="uninstall-card">
+  <div class="warning-banner">
+    <strong>&#9888; Warning</strong>
+    This will remove all BrainrotFilter configuration from this system,
+    including iptables rules, Squid configuration, and the CA certificate.
+    The BrainrotFilter service will continue running but will no longer intercept traffic.
+  </div>
+
+  <!-- Status checklist -->
+  <div id="statusSection">
+    <h3 style="font-size:16px;margin-bottom:12px;">Detected Configuration</h3>
+    <ul class="status-checklist" id="statusChecklist">
+      <li><span class="status-icon loading">...</span> Checking system status...</li>
+    </ul>
+    <button class="btn-secondary" id="btnCheckStatus" onclick="checkStatus()" style="margin-top:4px">
+      Refresh Status
+    </button>
+  </div>
+
+  <!-- Uninstall button -->
+  <div id="uninstallSection" style="display:none;margin-top:20px;">
+    <button class="btn-danger" id="btnUninstall" onclick="runUninstall()">
+      Uninstall BrainrotFilter Configuration
+    </button>
+  </div>
+
+  <!-- Progress -->
+  <div class="progress-steps" id="progressSteps" style="display:none;"></div>
+  <button class="copy-log-btn" id="copyLogBtn" style="display:none;" onclick="copyLog()">Copy full log</button>
+
+  <div class="complete-banner" id="completeBanner">
+    <p>&#10003; Uninstall Complete</p>
+    <small>You can now safely stop the BrainrotFilter service with: <code>sudo systemctl stop brainrotfilter</code></small>
+  </div>
+
+  <div class="error-banner" id="errorBanner">
+    Uninstall encountered errors. Review the log above.
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  'use strict';
+
+  var uninstallLog = [];
+
+  function esc(s) {
+    var d = document.createElement('div');
+    d.textContent = s || '';
+    return d.innerHTML;
+  }
+
+  // Auto-check status on load
+  setTimeout(function() { checkStatus(); }, 500);
+
+  window.checkStatus = function() {
+    var btn = document.getElementById('btnCheckStatus');
+    btn.disabled = true;
+    btn.textContent = 'Checking...';
+
+    fetch('/uninstall/status')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      btn.disabled = false;
+      btn.textContent = 'Refresh Status';
+      if (!data.success) {
+        alert('Status check failed: ' + (data.error || 'unknown'));
+        return;
+      }
+      var items = [
+        {key: 'ca_exists', label: 'BrainrotFilter CA Certificate'},
+        {key: 'squid_configured', label: 'Squid SSL Bump Configuration'},
+        {key: 'iptables_rules', label: 'iptables Redirect/QUIC Rules'},
+        {key: 'dns_blocks', label: '/etc/hosts Entries'},
+        {key: 'helpers_installed', label: 'Shell Helper Scripts'},
+        {key: 'config_dir_exists', label: 'Config Directory (/etc/brainrotfilter)'},
+      ];
+      var cl = document.getElementById('statusChecklist');
+      cl.innerHTML = '';
+      var anyFound = false;
+      for (var i = 0; i < items.length; i++) {
+        var found = data[items[i].key];
+        if (found) anyFound = true;
+        var li = document.createElement('li');
+        li.innerHTML = '<span class="status-icon ' + (found ? 'found' : 'clean') + '">' +
+          (found ? '&#10007;' : '&#10003;') + '</span>' +
+          '<span>' + esc(items[i].label) + '</span>' +
+          '<span style="margin-left:auto;font-size:12px;color:' +
+          (found ? '#ef4444' : '#22c55e') + ';">' +
+          (found ? 'Will be removed' : 'Not found') + '</span>';
+        cl.appendChild(li);
+      }
+      if (anyFound) {
+        document.getElementById('uninstallSection').style.display = 'block';
+      } else {
+        document.getElementById('uninstallSection').style.display = 'none';
+      }
+    })
+    .catch(function(e) {
+      btn.disabled = false;
+      btn.textContent = 'Refresh Status';
+      alert('Error: ' + e.message);
+    });
+  };
+
+  window.runUninstall = function() {
+    if (!confirm('Are you sure you want to remove all BrainrotFilter configuration from this system?')) return;
+
+    var btn = document.getElementById('btnUninstall');
+    btn.disabled = true;
+    btn.textContent = 'Uninstalling...';
+    uninstallLog = [];
+
+    var progressEl = document.getElementById('progressSteps');
+    progressEl.style.display = 'block';
+    progressEl.innerHTML = '';
+    document.getElementById('copyLogBtn').style.display = 'inline-flex';
+    document.getElementById('completeBanner').className = 'complete-banner';
+    document.getElementById('errorBanner').className = 'error-banner';
+
+    var steps = [
+      {id: 'detect', label: 'Detecting configuration...'},
+      {id: 'remove_squid_config', label: 'Removing Squid configuration...'},
+      {id: 'remove_ca', label: 'Removing CA certificate...'},
+      {id: 'remove_iptables', label: 'Removing iptables rules...'},
+      {id: 'remove_dns_blocks', label: 'Removing /etc/hosts entries...'},
+      {id: 'remove_helpers', label: 'Removing shell helpers...'},
+      {id: 'restart_squid', label: 'Restarting Squid...'},
+      {id: 'cleanup', label: 'Cleaning up...'},
+      {id: 'verify', label: 'Verifying removal...'},
+    ];
+
+    for (var s = 0; s < steps.length; s++) {
+      var div = document.createElement('div');
+      div.className = 'progress-step';
+      div.id = 'ustep_' + steps[s].id;
+      div.innerHTML = '<div class="progress-step-icon"><span style="color:#64748b;">&#8226;</span></div>' +
+        '<div style="flex:1"><span>' + steps[s].label + '</span>' +
+        '<details class="step-details" id="udetails_' + steps[s].id + '">' +
+        '<summary>&#9654; details</summary>' +
+        '<pre class="step-log" id="ulog_' + steps[s].id + '"></pre>' +
+        '</details></div>';
+      progressEl.appendChild(div);
+    }
+
+    var hasErrors = false;
+
+    fetch('/uninstall/apply', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({confirm: true}),
+    })
+    .then(function(resp) {
+      var reader = resp.body.getReader();
+      var decoder = new TextDecoder();
+      var buffer = '';
+
+      function read() {
+        return reader.read().then(function(result) {
+          if (result.done) return;
+          buffer += decoder.decode(result.value, {stream: true});
+          var lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          for (var i = 0; i < lines.length; i++) {
+            var line = lines[i];
+            if (line.indexOf('data: ') !== 0) continue;
+            try {
+              var evt = JSON.parse(line.slice(6));
+              uninstallLog.push(evt);
+              updateStep(evt);
+              if (evt.done) {
+                document.getElementById('completeBanner').className = 'complete-banner show';
+              }
+              if (evt.status === 'error') hasErrors = true;
+            } catch(e) { /* ignore */ }
+          }
+          return read();
+        });
+      }
+      return read();
+    })
+    .catch(function(e) {
+      hasErrors = true;
+      document.getElementById('errorBanner').textContent = 'Connection lost: ' + e.message;
+      document.getElementById('errorBanner').className = 'error-banner show';
+    })
+    .finally(function() {
+      btn.disabled = false;
+      btn.textContent = 'Uninstall BrainrotFilter Configuration';
+      if (hasErrors) {
+        document.getElementById('errorBanner').className = 'error-banner show';
+      }
+    });
+  };
+
+  function updateStep(evt) {
+    var el = document.getElementById('ustep_' + evt.step);
+    if (!el) return;
+    el.className = 'progress-step ' + evt.status;
+    var icon = '';
+    if (evt.status === 'running') icon = '<div class="spinner"></div>';
+    else if (evt.status === 'done') icon = '<span style="color:#22c55e;">&#10003;</span>';
+    else if (evt.status === 'error') icon = '<span style="color:#ef4444;">&#10007;</span>';
+    else if (evt.status === 'warning') icon = '<span style="color:#f59e0b;">&#9888;</span>';
+    el.querySelector('.progress-step-icon').innerHTML = icon;
+    var label = el.querySelector('span');
+    if (label) label.textContent = evt.message;
+    var logEl = document.getElementById('ulog_' + evt.step);
+    if (logEl) logEl.textContent += JSON.stringify(evt, null, 2) + '\n';
+    if (evt.status === 'error') {
+      var details = document.getElementById('udetails_' + evt.step);
+      if (details) details.setAttribute('open', '');
+    }
+  }
+
+  window.copyLog = function() {
+    var text = JSON.stringify(uninstallLog, null, 2);
+    var btn = document.getElementById('copyLogBtn');
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(function() {
+        var orig = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(function() { btn.textContent = orig; }, 2000);
+      });
+    } else {
+      var ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta);
+      ta.select(); document.execCommand('copy');
+      document.body.removeChild(ta);
+      btn.textContent = 'Copied!';
+      setTimeout(function() { btn.textContent = 'Copy full log'; }, 2000);
+    }
+  };
+
+})();
+</script>
+{% endblock %}

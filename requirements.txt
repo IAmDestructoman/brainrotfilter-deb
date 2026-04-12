@@ -1,0 +1,43 @@
+# BrainrotFilter Python Dependencies
+# Install with: pip install -r requirements.txt
+
+# Web framework & server
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+jinja2>=3.1.3
+python-multipart>=0.0.9
+aiofiles>=23.2.1
+
+# HTTP clients
+aiohttp>=3.9.3
+httpx>=0.27.0
+
+# Data validation
+pydantic>=2.6.0
+
+# YouTube / video
+yt-dlp>=2024.1.0
+google-api-python-client>=2.118.0
+isodate>=0.6.1
+
+# Scene detection
+scenedetect[opencv]>=0.6.3
+opencv-python-headless>=4.9.0
+
+# Audio analysis
+librosa>=0.10.1
+soundfile>=0.12.1
+numpy>=1.26.0
+
+# Speech-to-text
+vosk>=0.3.45
+
+# OCR
+pytesseract>=0.3.10
+Pillow>=10.2.0
+
+# Database (async SQLite for FastAPI compatibility)
+aiosqlite>=0.20.0
+
+# System utilities (no additional install needed -- standard library)
+# subprocess, threading, queue, logging all included in stdlib

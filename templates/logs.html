@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+
+{% block title %}Logs{% endblock %}
+{% block page_title %}Request Logs{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Request Logs</h1>
+    <div class="subtitle">Client proxy request history</div>
+  </div>
+  <div class="flex flex-gap">
+    <span class="realtime-badge" id="poll-badge">
+      <span class="realtime-dot"></span>
+      Live (10s)
+    </span>
+    <button class="btn btn-secondary" onclick="exportLogs()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Export CSV
+    </button>
+  </div>
+</div>
+
+<!-- ── Filters ────────────────────────────────────────────────── -->
+<div class="card" style="margin-bottom:16px">
+  <div class="card-body" style="padding:14px 16px">
+    <div class="toolbar">
+      <div class="search-box" style="max-width:200px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="filter-ip" placeholder="Client IP…" aria-label="Filter by client IP">
+      </div>
+
+      <select id="filter-action" class="form-select" style="width:auto;min-width:140px" aria-label="Filter by action">
+        <option value="">All Actions</option>
+        <option value="allow">Allow</option>
+        <option value="monitor">Monitor</option>
+        <option value="soft_block">Soft Block</option>
+        <option value="block">Block</option>
+      </select>
+
+      <input type="date" id="filter-log-date-from" class="form-input" style="width:auto" aria-label="From date">
+      <input type="date" id="filter-log-date-to"   class="form-input" style="width:auto" aria-label="To date">
+
+      <button class="btn btn-primary" onclick="applyLogFilters()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polygon points="22,3 2,3 10,12.46 10,19 14,21 14,12.46"/></svg>
+        Filter
+      </button>
+      <button class="btn btn-secondary" onclick="clearLogFilters()">Clear</button>
+
+      <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+        <label style="font-size:0.8rem;color:var(--text-muted)">Page size</label>
+        <select id="page-size-select" class="form-select" style="width:auto" aria-label="Page size">
+          <option value="25">25</option>
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+        </select>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Logs Table ─────────────────────────────────────────────── -->
+<div class="card">
+  <div class="table-wrap" style="border:none">
+    <table id="logs-table" aria-label="Request logs">
+      <thead>
+        <tr>
+          <th class="sortable" data-key="timestamp" style="width:150px">Timestamp</th>
+          <th class="sortable" data-key="client_ip" style="width:130px">Client IP</th>
+          <th class="sortable" data-key="video_title">Video Title</th>
+          <th style="width:110px">Video ID</th>
+          <th class="sortable" data-key="channel_id" style="width:130px">Channel</th>
+          <th class="sortable" data-key="action_taken" style="width:110px">Action</th>
+          <th style="width:200px">Scores</th>
+          <th style="width:180px">User Agent</th>
+        </tr>
+      </thead>
+      <tbody id="logs-tbody">
+        <tr><td colspan="8"><div class="loading-overlay"><div class="spinner lg"></div><span>Loading logs…</span></div></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div id="logs-pagination" class="pagination"></div>
+</div>
+
+<!-- ── Total row count ────────────────────────────────────────── -->
+<div style="text-align:right;font-size:0.78rem;color:var(--text-dim);margin-top:8px" id="log-count"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+'use strict';
+
+let logData      = [];
+let filteredLogs = [];
+let currentPage  = 1;
+let pageSize     = 50;
+let paginator    = null;
+let pollTimer    = null;
+let totalLogs    = 0;
+
+/* ── Render ────────────────────────────────────────────────── */
+
+function renderLogs(logs) {
+  const tbody = document.getElementById('logs-tbody');
+  const start  = (currentPage - 1) * pageSize;
+  const page   = logs.slice(start, start + pageSize);
+
+  if (!logs.length) {
+    tbody.innerHTML = `<tr><td colspan="8">
+      <div class="empty-state">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+        <h3>No log entries</h3><p>Logs appear here as clients make requests</p>
+      </div></td></tr>`;
+    document.getElementById('logs-pagination').innerHTML = '';
+    document.getElementById('log-count').textContent = '';
+    return;
+  }
+
+  tbody.innerHTML = page.map(log => {
+    const scores = typeof log.scores === 'string' ? (JSON.parse(log.scores || 'null') || {}) : (log.scores || {});
+    const ua = log.user_agent || '—';
+    const uaShort = ua.length > 28 ? ua.slice(0, 28) + '…' : ua;
+    return `
+      <tr>
+        <td class="text-mono" style="font-size:0.78rem;white-space:nowrap">${BF.formatDate(log.timestamp)}</td>
+        <td class="text-mono">${BF.escapeHtml(log.client_ip || '—')}</td>
+        <td style="max-width:220px">
+          ${log.video_id
+            ? `<a href="#" onclick="showVideoFromLog('${BF.escapeHtml(log.video_id)}');return false" style="font-size:0.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block" title="${BF.escapeHtml(log.video_title || log.video_id)}">${BF.escapeHtml(log.video_title || log.video_id)}</a>`
+            : '<span class="text-dim">—</span>'}
+        </td>
+        <td class="text-mono" style="font-size:0.74rem">${BF.escapeHtml(log.video_id || '—')}</td>
+        <td class="muted" style="font-size:0.82rem">${BF.escapeHtml(log.channel_id || '—')}</td>
+        <td>${BF.statusBadge(log.action_taken || 'allow')}</td>
+        <td>
+          ${scores.combined_score != null
+            ? `<div style="display:flex;gap:6px;align-items:center;font-size:0.78rem;font-family:var(--font-mono)">
+                <span title="Keyword" style="color:var(--text-muted)">K:${scores.keyword_score??'?'}</span>
+                <span title="Scene"   style="color:var(--text-muted)">S:${scores.scene_score??'?'}</span>
+                <span title="Audio"   style="color:var(--text-muted)">A:${scores.audio_score??'?'}</span>
+                <span title="Combined" class="${BF.scoreColorClass(scores.combined_score||0)}" style="font-weight:600">⟹${scores.combined_score}</span>
+              </div>`
+            : '<span class="text-dim">—</span>'}
+        </td>
+        <td class="muted" style="font-size:0.75rem" title="${BF.escapeHtml(ua)}">${BF.escapeHtml(uaShort)}</td>
+      </tr>
+    `;
+  }).join('');
+
+  if (!paginator) {
+    paginator = new BF.Paginator({
+      container: document.getElementById('logs-pagination'),
+      pageSize,
+      onPage: (page) => { currentPage = page; renderLogs(filteredLogs); },
+    });
+  }
+  paginator.pageSize = pageSize;
+  paginator.setTotal(logs.length);
+
+  document.getElementById('log-count').textContent = `Showing ${logs.length.toLocaleString()} of ${totalLogs.toLocaleString()} total log entries`;
+
+  // Column sorting
+  document.querySelectorAll('#logs-table thead th.sortable').forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.key;
+      const dir = th.classList.contains('sorted-asc') ? -1 : 1;
+      document.querySelectorAll('#logs-table thead th').forEach(h => h.classList.remove('sorted-asc','sorted-desc'));
+      th.classList.add(dir === 1 ? 'sorted-asc' : 'sorted-desc');
+      filteredLogs.sort((a, b) => {
+        const av = a[key] ?? '', bv = b[key] ?? '';
+        return typeof av === 'string' ? av.localeCompare(bv) * dir : (av - bv) * dir;
+      });
+      currentPage = 1;
+      renderLogs(filteredLogs);
+    });
+  }, { once: true });
+}
+
+/* ── Load ──────────────────────────────────────────────────── */
+
+async function loadLogs() {
+  try {
+    const qs = new URLSearchParams({ limit: 1000, ...getFilters() });
+    const data = await BF.fetchJSON(`/api/logs?${qs}`);
+    logData = data.items || data || [];
+    totalLogs = data.total || logData.length;
+    filteredLogs = [...logData];
+    renderLogs(filteredLogs);
+  } catch (e) {
+    BF.showError(document.getElementById('logs-tbody').parentElement, e.message);
+    console.error('Log load error:', e);
+  }
+}
+
+/* ── Filters ─────────────────────────────────────────────────── */
+
+function getFilters() {
+  return {
+    client_ip:    document.getElementById('filter-ip').value || undefined,
+    action_taken: document.getElementById('filter-action').value || undefined,
+    date_from:    document.getElementById('filter-log-date-from').value || undefined,
+    date_to:      document.getElementById('filter-log-date-to').value || undefined,
+  };
+}
+
+function applyLogFilters() {
+  const ip        = document.getElementById('filter-ip').value.toLowerCase();
+  const action    = document.getElementById('filter-action').value;
+  const dateFrom  = document.getElementById('filter-log-date-from').value;
+  const dateTo    = document.getElementById('filter-log-date-to').value;
+
+  filteredLogs = logData.filter(log => {
+    if (ip && !(log.client_ip || '').toLowerCase().includes(ip)) return false;
+    if (action && log.action_taken !== action) return false;
+    if (dateFrom && log.timestamp < dateFrom) return false;
+    if (dateTo   && log.timestamp > dateTo + 'T23:59:59') return false;
+    return true;
+  });
+
+  currentPage = 1;
+  renderLogs(filteredLogs);
+}
+
+function clearLogFilters() {
+  document.getElementById('filter-ip').value = '';
+  document.getElementById('filter-action').value = '';
+  document.getElementById('filter-log-date-from').value = '';
+  document.getElementById('filter-log-date-to').value = '';
+  filteredLogs = [...logData];
+  currentPage = 1;
+  renderLogs(filteredLogs);
+}
+
+/* ── Video detail from log ───────────────────────────────────── */
+
+function showVideoFromLog(videoId) {
+  window.location.href = `/videos?highlight=${videoId}`;
+}
+
+/* ── Export ──────────────────────────────────────────────────── */
+
+function exportLogs() {
+  BF.exportDataToCSV(filteredLogs, [
+    { label: 'Timestamp',   key: 'timestamp' },
+    { label: 'Client IP',   key: 'client_ip' },
+    { label: 'Video Title', key: 'video_title' },
+    { label: 'Video ID',    key: 'video_id' },
+    { label: 'Channel ID',  key: 'channel_id' },
+    { label: 'Action',      key: 'action_taken' },
+    { label: 'User Agent',  key: 'user_agent' },
+  ], 'brainrotfilter_logs.csv');
+}
+
+/* ── Polling ─────────────────────────────────────────────────── */
+
+function startPolling() {
+  stopPolling();
+  pollTimer = setInterval(loadLogs, 10000);
+}
+
+function stopPolling() {
+  clearInterval(pollTimer);
+}
+
+/* ── Page size change ────────────────────────────────────────── */
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('page-size-select').addEventListener('change', (e) => {
+    pageSize = parseInt(e.target.value);
+    currentPage = 1;
+    if (paginator) { paginator.pageSize = pageSize; }
+    renderLogs(filteredLogs);
+  });
+
+  let ipTimeout;
+  document.getElementById('filter-ip').addEventListener('input', () => {
+    clearTimeout(ipTimeout);
+    ipTimeout = setTimeout(applyLogFilters, 400);
+  });
+  document.getElementById('filter-action').addEventListener('change', applyLogFilters);
+
+  loadLogs();
+  startPolling();
+});
+
+// Stop polling when tab/window hidden
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) stopPolling();
+  else startPolling();
+});
+</script>
+{% endblock %}

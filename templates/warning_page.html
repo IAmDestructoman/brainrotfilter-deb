@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Content Warning — BrainrotFilter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css">
+  <style>
+    body { background: var(--bg-primary); font-family: var(--font); }
+
+    .warning-header {
+      background: linear-gradient(135deg, rgba(244, 162, 97, 0.12), rgba(26, 26, 46, 0));
+      border-bottom: 1px solid rgba(244, 162, 97, 0.3);
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+      padding: 28px 40px 20px;
+      text-align: center;
+    }
+
+    .warning-body { padding: 20px 40px 32px; }
+
+    .video-info-box {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin: 14px 0;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      text-align: left;
+    }
+
+    .bypass-btn {
+      background: var(--warning-dim);
+      color: var(--warning);
+      border: 1px solid rgba(244,162,97,0.4);
+      padding: 10px 24px;
+      border-radius: var(--radius);
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: var(--font);
+      transition: all 0.18s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .bypass-btn:hover {
+      background: var(--warning);
+      color: #000;
+    }
+
+    .countdown {
+      font-size: 0.82rem;
+      color: var(--text-dim);
+      margin-top: 8px;
+      font-family: monospace;
+    }
+
+    .score-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      font-size: 0.85rem;
+    }
+
+    .score-row:last-child { border-bottom: none; }
+    .score-row .label { color: var(--text-muted); }
+    .score-row .value { font-family: monospace; font-weight: 700; }
+  </style>
+</head>
+<body>
+
+<div class="standalone-page">
+  <div class="standalone-card" style="padding:0;overflow:hidden;max-width:560px">
+
+    <!-- Header -->
+    <div class="warning-header">
+      <div class="block-icon warning" style="margin:0 auto 16px">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2" aria-hidden="true">
+          <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/>
+          <line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+      </div>
+      <div class="standalone-title" style="font-size:1.35rem;color:var(--warning)">Content Warning</div>
+      <div class="standalone-sub" style="margin-bottom:0;font-size:0.85rem">
+        This video has been flagged as potentially containing brainrot-style content.
+        Continued viewing may contribute to reduced attention span.
+      </div>
+    </div>
+
+    <!-- Body -->
+    <div class="warning-body">
+
+      <!-- Warning banner -->
+      <div class="warning-banner">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" flex-shrink="0" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span>Flagged by BrainrotFilter — Score: <strong>{{ combined_score | int if combined_score is defined else '?' }}/100</strong></span>
+      </div>
+
+      <!-- Video info -->
+      {% if video_title or video_id %}
+      <div class="video-info-box">
+        {% if thumbnail_url %}
+        <img src="{{ thumbnail_url | e }}" alt="Video thumbnail"
+             style="width:80px;height:45px;border-radius:4px;object-fit:cover;background:var(--bg-card);flex-shrink:0"
+             onerror="this.style.display='none'">
+        {% endif %}
+        <div style="flex:1;min-width:0">
+          {% if video_title %}
+          <div style="font-weight:600;font-size:0.9rem;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ video_title | e }}</div>
+          {% endif %}
+          {% if channel_name %}
+          <div style="font-size:0.78rem;color:var(--text-muted);margin-top:3px">{{ channel_name | e }}</div>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Score details -->
+      <div style="background:var(--bg-primary);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin:14px 0;text-align:left">
+        <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;color:var(--text-dim);margin-bottom:10px">Analysis Scores</div>
+
+        {% if keyword_score is defined %}
+        <div class="score-row">
+          <span class="label">Keyword Score</span>
+          <span class="value" style="color:{{ 'var(--danger)' if keyword_score >= 70 else ('var(--warning)' if keyword_score >= 50 else ('var(--accent)' if keyword_score >= 30 else 'var(--success)')) }}">{{ keyword_score | int }}</span>
+        </div>
+        {% endif %}
+        {% if scene_score is defined %}
+        <div class="score-row">
+          <span class="label">Scene Score</span>
+          <span class="value" style="color:{{ 'var(--danger)' if scene_score >= 70 else ('var(--warning)' if scene_score >= 50 else ('var(--accent)' if scene_score >= 30 else 'var(--success)')) }}">{{ scene_score | int }}</span>
+        </div>
+        {% endif %}
+        {% if audio_score is defined %}
+        <div class="score-row">
+          <span class="label">Audio Score</span>
+          <span class="value" style="color:{{ 'var(--danger)' if audio_score >= 70 else ('var(--warning)' if audio_score >= 50 else ('var(--accent)' if audio_score >= 30 else 'var(--success)')) }}">{{ audio_score | int }}</span>
+        </div>
+        {% endif %}
+        {% if combined_score is defined %}
+        <div class="score-row" style="border-top:1px solid var(--border);margin-top:6px;padding-top:10px">
+          <span class="label" style="font-weight:600;color:var(--text-primary)">Combined Score</span>
+          <span class="value" style="font-size:1.1rem;color:var(--warning)">{{ combined_score | int }}/100</span>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Matched keywords -->
+      {% if matched_keywords %}
+      <div style="margin:14px 0;text-align:left">
+        <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;color:var(--text-dim);margin-bottom:8px">Detected Keywords</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">
+          {% for kw in matched_keywords %}
+          <span class="keyword-tag">{{ kw | e }}</span>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Separator -->
+      <div style="border-top:1px solid var(--border);margin:20px 0"></div>
+
+      <!-- Action buttons -->
+      <div style="text-align:center">
+        <div style="margin-bottom:12px;font-size:0.82rem;color:var(--text-muted)">
+          You can proceed to watch this video, or go back.
+        </div>
+        <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+          <button class="btn btn-secondary btn-lg" onclick="goBack()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12,19 5,12 12,5"/></svg>
+            Go Back
+          </button>
+          <button class="bypass-btn" id="btn-continue" onclick="continueAnyway()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg>
+            Continue Anyway
+            <span id="bypass-countdown" class="countdown" style="margin-top:0;margin-left:4px">(5)</span>
+          </button>
+        </div>
+        <div id="bypass-countdown-sub" class="countdown" style="margin-top:10px">
+          Continue button unlocks in <span id="countdown-num">5</span>s
+        </div>
+      </div>
+
+    </div><!-- /warning-body -->
+
+    <!-- Footer -->
+    <div class="standalone-footer" style="text-align:center">
+      <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:4px">
+        <svg width="16" height="16" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+          <rect width="32" height="32" rx="6" fill="#00b4d8" fill-opacity="0.15"/>
+          <path d="M16 5L7 9v7c0 5.25 3.85 10.15 9 11.35C22.15 26.15 26 21.25 26 16V9L16 5z" fill="none" stroke="#00b4d8" stroke-width="1.8"/>
+          <path d="M12 13h8M13.5 16h5M15 19h2" stroke="#00b4d8" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <span style="font-weight:600;color:var(--text-muted)">BrainrotFilter</span>
+      </div>
+      <div>Enforced by network policy · Soft Block</div>
+    </div>
+
+  </div><!-- /standalone-card -->
+</div><!-- /standalone-page -->
+
+<script>
+'use strict';
+
+const VIDEO_ID    = '{{ video_id | e }}';
+const BYPASS_URL  = '{{ bypass_url | default("") | e }}';
+const ORIGIN_URL  = '{{ origin_url | default("") | e }}';
+
+// Countdown before enabling continue button
+let countdown = 5;
+const btn      = document.getElementById('btn-continue');
+const cdNum    = document.getElementById('countdown-num');
+const cdBadge  = document.getElementById('bypass-countdown');
+const cdSub    = document.getElementById('bypass-countdown-sub');
+
+btn.disabled = true;
+btn.style.opacity = '0.5';
+btn.style.cursor  = 'not-allowed';
+
+const timer = setInterval(() => {
+  countdown--;
+  if (cdNum)   cdNum.textContent   = countdown;
+  if (cdBadge) cdBadge.textContent = `(${countdown})`;
+
+  if (countdown <= 0) {
+    clearInterval(timer);
+    btn.disabled      = false;
+    btn.style.opacity = '';
+    btn.style.cursor  = '';
+    if (cdBadge) cdBadge.textContent = '';
+    if (cdSub)   cdSub.style.display = 'none';
+  }
+}, 1000);
+
+function continueAnyway() {
+  // Set a cookie to bypass this video for the current session
+  const expires = new Date(Date.now() + 3600 * 1000).toUTCString();
+  document.cookie = `bypass_${VIDEO_ID}=1; expires=${expires}; path=/; SameSite=Lax`;
+
+  // If we have a bypass URL (direct video URL), redirect there
+  if (BYPASS_URL) {
+    window.location.href = BYPASS_URL;
+  } else if (ORIGIN_URL) {
+    window.location.href = ORIGIN_URL;
+  } else {
+    history.back();
+  }
+}
+
+function goBack() {
+  history.back();
+}
+</script>
+</body>
+</html>

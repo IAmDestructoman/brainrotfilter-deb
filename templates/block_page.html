@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Blocked — BrainrotFilter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css">
+  <style>
+    body { background: var(--bg-primary); font-family: var(--font); }
+
+    .blocked-header {
+      background: linear-gradient(135deg, rgba(230, 57, 70, 0.15), rgba(26, 26, 46, 0));
+      border-bottom: 1px solid rgba(230, 57, 70, 0.3);
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+      padding: 32px 40px 24px;
+    }
+
+    .blocked-body { padding: 24px 40px 32px; }
+
+    .video-info-box {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin: 16px 0;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      text-align: left;
+    }
+
+    .video-info-thumb {
+      width: 80px;
+      height: 45px;
+      border-radius: 4px;
+      object-fit: cover;
+      background: var(--bg-card);
+      flex-shrink: 0;
+    }
+
+    .video-info-text { flex: 1; min-width: 0; }
+
+    .video-info-title {
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .video-info-channel {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 3px;
+    }
+
+    .block-reason-list {
+      text-align: left;
+      background: var(--bg-primary);
+      border: 1px solid rgba(230,57,70,0.2);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin: 16px 0;
+    }
+
+    .block-reason-list h4 {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      color: var(--danger);
+      margin-bottom: 10px;
+    }
+
+    .block-reason-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 0;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .block-reason-item svg { color: var(--danger); flex-shrink: 0; }
+
+    .whitelist-form {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin: 16px 0;
+      text-align: left;
+    }
+
+    .whitelist-form h4 {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+      font-weight: 600;
+    }
+
+    .wl-request-sent {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      color: var(--success);
+      font-size: 0.88rem;
+    }
+  </style>
+</head>
+<body>
+
+<div class="standalone-page">
+  <div class="standalone-card" style="padding:0;overflow:hidden;max-width:580px">
+
+    <!-- Header -->
+    <div class="blocked-header" style="text-align:center">
+      <div class="block-icon blocked" style="margin:0 auto 16px">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2" aria-hidden="true">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+        </svg>
+      </div>
+      <div class="standalone-title" style="font-size:1.4rem">Video Blocked</div>
+      <div class="standalone-sub" style="margin-bottom:0;font-size:0.85rem">
+        This video has been flagged as brainrot content by BrainrotFilter and is not available on this network.
+      </div>
+    </div>
+
+    <!-- Body -->
+    <div class="blocked-body">
+
+      <!-- Video info -->
+      {% if video_title or video_id %}
+      <div class="video-info-box">
+        {% if thumbnail_url %}
+        <img class="video-info-thumb" src="{{ thumbnail_url | e }}" alt="Video thumbnail" onerror="this.style.display='none'">
+        {% endif %}
+        <div class="video-info-text">
+          {% if video_title %}
+          <div class="video-info-title" title="{{ video_title | e }}">{{ video_title | e }}</div>
+          {% endif %}
+          {% if channel_name %}
+          <div class="video-info-channel">{{ channel_name | e }}</div>
+          {% endif %}
+          {% if video_id %}
+          <div style="font-size:0.72rem;color:var(--text-dim);font-family:monospace;margin-top:2px">{{ video_id | e }}</div>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Score breakdown -->
+      {% if combined_score is defined %}
+      <div class="score-breakdown-grid">
+        <div class="score-box">
+          <div class="score-type">Keyword</div>
+          <div class="score-num" style="color:{{ 'var(--danger)' if keyword_score >= 70 else ('var(--warning)' if keyword_score >= 50 else ('var(--accent)' if keyword_score >= 30 else 'var(--success)')) }}">{{ keyword_score | int }}</div>
+        </div>
+        <div class="score-box">
+          <div class="score-type">Scene</div>
+          <div class="score-num" style="color:{{ 'var(--danger)' if scene_score >= 70 else ('var(--warning)' if scene_score >= 50 else ('var(--accent)' if scene_score >= 30 else 'var(--success)')) }}">{{ scene_score | int }}</div>
+        </div>
+        <div class="score-box">
+          <div class="score-type">Audio</div>
+          <div class="score-num" style="color:{{ 'var(--danger)' if audio_score >= 70 else ('var(--warning)' if audio_score >= 50 else ('var(--accent)' if audio_score >= 30 else 'var(--success)')) }}">{{ audio_score | int }}</div>
+        </div>
+      </div>
+
+      <!-- Combined score bar -->
+      <div style="margin:16px 0">
+        <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:var(--text-muted);margin-bottom:6px">
+          <span>Brainrot Score</span>
+          <span style="font-weight:700;font-size:0.9rem;color:var(--danger)">{{ combined_score | int }}/100</span>
+        </div>
+        <div class="score-meter-track" style="height:10px">
+          <div class="score-meter-fill" style="width:{{ combined_score | int }}%"></div>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Block reasons -->
+      {% if block_reasons %}
+      <div class="block-reason-list">
+        <h4>Why was this blocked?</h4>
+        {% for reason in block_reasons %}
+        <div class="block-reason-item">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          {{ reason | e }}
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="block-reason-list">
+        <h4>Why was this blocked?</h4>
+        <div class="block-reason-item">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          High brainrot content score detected
+        </div>
+        {% if keyword_score is defined and keyword_score >= 40 %}
+        <div class="block-reason-item">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          Brainrot keywords detected in title/description
+        </div>
+        {% endif %}
+        {% if scene_score is defined and scene_score >= 50 %}
+        <div class="block-reason-item">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          Excessive scene cuts / rapid editing detected
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      <!-- Whitelist request form -->
+      {% if video_id %}
+      <div class="whitelist-form">
+        <h4>Request Whitelist Access</h4>
+        <div id="wl-request-form">
+          <div style="margin-bottom:10px">
+            <textarea id="wl-request-reason" class="form-input" placeholder="Reason for requesting access…" style="min-height:60px"></textarea>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="submitWhitelistRequest()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 12 19.79 19.79 0 01.1 3.19 2 2 0 012.08 1h3a2 2 0 012 1.72A12.84 12.84 0 007.5 8.19a2 2 0 01-.45 2.11L5.93 11.4a16 16 0 006.29 6.29l1.1-1.12a2 2 0 012.11-.45 12.84 12.84 0 005.06 1.44A2 2 0 0122 19z"/></svg>
+            Submit Request
+          </button>
+          <div class="wl-request-sent" id="wl-request-sent">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 11l3 3L22 4"/></svg>
+            Whitelist request submitted to network administrator.
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Action buttons -->
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:8px">
+        <button class="btn btn-secondary" onclick="history.back()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12,19 5,12 12,5"/></svg>
+          Go Back
+        </button>
+        <a href="/" class="btn btn-secondary">Home</a>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="standalone-footer" style="text-align:center">
+      <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:4px">
+        <svg width="16" height="16" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+          <rect width="32" height="32" rx="6" fill="#00b4d8" fill-opacity="0.15"/>
+          <path d="M16 5L7 9v7c0 5.25 3.85 10.15 9 11.35C22.15 26.15 26 21.25 26 16V9L16 5z" fill="none" stroke="#00b4d8" stroke-width="1.8"/>
+          <path d="M12 13h8M13.5 16h5M15 19h2" stroke="#00b4d8" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <span style="font-weight:600;color:var(--text-muted)">BrainrotFilter</span>
+      </div>
+      <div>Enforced by network policy · pfSense CE</div>
+      {% if client_ip %}
+      <div style="margin-top:4px;font-family:monospace;font-size:0.72rem">Client: {{ client_ip | e }}</div>
+      {% endif %}
+    </div>
+
+  </div><!-- /standalone-card -->
+</div><!-- /standalone-page -->
+
+<script>
+async function submitWhitelistRequest() {
+  const reason = document.getElementById('wl-request-reason').value.trim();
+  const btn = event.target.closest('button');
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/whitelist-request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        video_id:   '{{ video_id | e }}',
+        channel_id: '{{ channel_id | e }}',
+        reason,
+        client_ip:  '{{ client_ip | e }}',
+      }),
+    });
+
+    if (res.ok) {
+      document.getElementById('wl-request-form').innerHTML =
+        '<div style="display:flex;align-items:center;gap:8px;color:var(--success);font-size:0.88rem">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 11l3 3L22 4"/></svg>' +
+        'Whitelist request submitted to the network administrator.</div>';
+    } else {
+      btn.disabled = false;
+      alert('Request submission failed. Please try again.');
+    }
+  } catch {
+    btn.disabled = false;
+  }
+}
+</script>
+</body>
+</html>

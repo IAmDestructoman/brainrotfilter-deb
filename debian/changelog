@@ -1,0 +1,12 @@
+brainrotfilter (1.0.0-1) unstable; urgency=medium
+
+  * Initial Debian package release
+  * Ported from pfSense/FreeBSD to Linux (Debian/Ubuntu)
+  * Replaced pfctl with conntrack for connection killing
+  * Replaced SSH-based pfSense configurator with local Linux configurator
+  * Uses openssl for CA certificate generation
+  * Uses iptables for transparent proxy and QUIC blocking
+  * Systemd service integration
+  * Web-based setup wizard for Linux
+
+ -- IAmDestructoman <github@destructoman.dev>  Sun, 12 Apr 2026 00:00:00 +0000

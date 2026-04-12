@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Dashboard</h1>
+    <div class="subtitle">Network YouTube filter overview</div>
+  </div>
+  <button id="btn-refresh-dashboard" class="btn btn-secondary">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+      <path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+    </svg>
+    Refresh
+  </button>
+</div>
+
+<!-- ── Stat Cards ─────────────────────────────────────────────── -->
+<div class="stat-cards" role="region" aria-label="Summary statistics">
+
+  <div class="stat-card">
+    <div class="stat-label">Total Videos Analyzed</div>
+    <div id="stat-total-videos" class="stat-value">—</div>
+    <div class="stat-sub">All time</div>
+  </div>
+
+  <div class="stat-card danger">
+    <div class="stat-label">Videos Blocked</div>
+    <div id="stat-blocked" class="stat-value">—</div>
+    <div class="stat-sub">Hard block tier</div>
+  </div>
+
+  <div class="stat-card warning">
+    <div class="stat-label">Channels Flagged</div>
+    <div id="stat-channels-flagged" class="stat-value">—</div>
+    <div class="stat-sub">Monitor or higher</div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-label">Active Monitors</div>
+    <div id="stat-active-monitors" class="stat-value">—</div>
+    <div class="stat-sub">Monitor tier</div>
+  </div>
+
+  <div class="stat-card success">
+    <div class="stat-label">Requests Today</div>
+    <div id="stat-requests-today" class="stat-value">—</div>
+    <div class="stat-sub">Since midnight</div>
+  </div>
+
+</div><!-- /stat-cards -->
+
+<!-- ── Charts Row 1 ───────────────────────────────────────────── -->
+<div class="charts-grid">
+
+  <!-- Score Distribution -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="18" y="3" width="4" height="18"/><rect x="10" y="8" width="4" height="13"/><rect x="2" y="13" width="4" height="8"/></svg>
+        Score Distribution
+      </span>
+      <span class="text-dim" style="font-size:0.75rem">Brainrot score ranges</span>
+    </div>
+    <div class="card-body">
+      <div class="chart-container">
+        <canvas id="chart-score-dist" aria-label="Score distribution chart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tier Distribution -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+        Tier Distribution
+      </span>
+      <span class="text-dim" style="font-size:0.75rem">By action category</span>
+    </div>
+    <div class="card-body">
+      <div class="chart-container">
+        <canvas id="chart-tier-dist" aria-label="Tier distribution doughnut chart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Time Series — full width -->
+  <div class="card span-full">
+    <div class="card-header">
+      <span class="card-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg>
+        Videos Analyzed — Last 30 Days
+      </span>
+      <span class="text-dim" style="font-size:0.75rem">Daily analysis volume</span>
+    </div>
+    <div class="card-body">
+      <div class="chart-container tall">
+        <canvas id="chart-time-series" aria-label="Time series chart of videos analyzed per day"></canvas>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /charts-grid -->
+
+<!-- ── Bottom Row ─────────────────────────────────────────────── -->
+<div class="charts-grid">
+
+  <!-- Recent Activity Feed -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
+        Recent Flagged Videos
+      </span>
+      <a href="/videos" class="btn btn-secondary btn-sm">View All</a>
+    </div>
+    <div id="activity-feed" class="activity-feed" role="feed" aria-label="Recent flagged videos">
+      <!-- Populated by dashboard.js -->
+      <div class="loading-overlay">
+        <div class="spinner"></div>
+        <span>Loading…</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top Flagged Channels -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+        Top Flagged Channels
+      </span>
+      <a href="/channels" class="btn btn-secondary btn-sm">View All</a>
+    </div>
+    <div class="table-wrap" style="border:none;border-radius:0">
+      <table id="top-channels-table" aria-label="Top flagged channels">
+        <thead>
+          <tr>
+            <th>Channel</th>
+            <th>Flagged / Analyzed</th>
+            <th>Flag %</th>
+            <th>Tier</th>
+          </tr>
+        </thead>
+        <tbody id="top-channels-tbody">
+          <tr><td colspan="4" class="text-center text-dim" style="padding:32px">
+            <div class="spinner" style="margin:0 auto"></div>
+          </td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /bottom row -->
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/dashboard.js"></script>
+{% endblock %}

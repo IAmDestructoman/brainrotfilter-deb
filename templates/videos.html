@@ -1,0 +1,533 @@
+{% extends "base.html" %}
+
+{% block title %}Videos{% endblock %}
+{% block page_title %}Videos{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Flagged Videos</h1>
+    <div class="subtitle">Analyzed videos with brainrot scores and statuses</div>
+  </div>
+  <div class="flex flex-gap">
+    <button class="btn btn-secondary" onclick="exportVideosCSV()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Export CSV
+    </button>
+  </div>
+</div>
+
+<!-- ── Filters ────────────────────────────────────────────────── -->
+<div class="card" style="margin-bottom:16px">
+  <div class="card-body" style="padding:14px 16px">
+    <div class="toolbar">
+      <div class="search-box">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="video-search" placeholder="Search title or channel…" aria-label="Search videos">
+      </div>
+
+      <select id="filter-status" class="form-select" style="width:auto;min-width:140px" aria-label="Filter by status">
+        <option value="">All Statuses</option>
+        <option value="allow">Allow</option>
+        <option value="monitor">Monitor</option>
+        <option value="soft_block">Soft Block</option>
+        <option value="block">Block</option>
+      </select>
+
+      <div style="display:flex;align-items:center;gap:8px">
+        <label style="font-size:0.8rem;color:var(--text-muted);white-space:nowrap">Score ≥</label>
+        <input type="range" id="filter-score-min" min="0" max="100" value="0" style="width:100px" aria-label="Minimum score filter">
+        <span id="filter-score-min-val" class="slider-value">0</span>
+      </div>
+
+      <input type="date" id="filter-date-from" class="form-input" style="width:auto" aria-label="From date">
+      <input type="date" id="filter-date-to"   class="form-input" style="width:auto" aria-label="To date">
+
+      <button class="btn btn-primary" onclick="applyFilters()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polygon points="22,3 2,3 10,12.46 10,19 14,21 14,12.46"/></svg>
+        Filter
+      </button>
+      <button class="btn btn-secondary" onclick="clearFilters()">Clear</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Bulk Action Bar ────────────────────────────────────────── -->
+<div id="bulk-bar" class="bulk-bar" aria-live="polite">
+  <span class="bulk-count">0 items selected</span>
+  <button class="btn btn-success btn-sm" data-bulk-action="allow">Allow All</button>
+  <button class="btn btn-secondary btn-sm" data-bulk-action="monitor">Monitor All</button>
+  <button class="btn btn-warning btn-sm" data-bulk-action="soft_block">Soft Block All</button>
+  <button class="btn btn-danger btn-sm" data-bulk-action="block">Block All</button>
+  <button class="btn btn-secondary btn-sm" onclick="bulkWhitelist()">Whitelist All</button>
+  <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="videoBulk.clear()">Clear</button>
+</div>
+
+<!-- ── Videos Table ──────────────────────────────────────────── -->
+<div class="card">
+  <div class="table-wrap" style="border:none">
+    <table id="videos-table" aria-label="Flagged videos">
+      <thead>
+        <tr>
+          <th style="width:36px"><input type="checkbox" data-all id="check-all" aria-label="Select all"></th>
+          <th style="width:72px">Thumb</th>
+          <th class="sortable" data-key="title">Title</th>
+          <th class="sortable" data-key="channel_name">Channel</th>
+          <th class="sortable" data-key="keyword_score" style="width:95px">Keyword</th>
+          <th class="sortable" data-key="scene_score"   style="width:80px">Scene</th>
+          <th class="sortable" data-key="audio_score"   style="width:80px">Audio</th>
+          <th class="sortable" data-key="combined_score" style="width:105px">Combined</th>
+          <th class="sortable" data-key="status" style="width:110px">Status</th>
+          <th class="sortable" data-key="analyzed_at" style="width:100px">Date</th>
+          <th style="width:130px">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="videos-tbody">
+        <tr><td colspan="11"><div class="loading-overlay"><div class="spinner lg"></div><span>Loading videos…</span></div></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div id="videos-pagination" class="pagination"></div>
+</div>
+
+<!-- ── Detail Modal ───────────────────────────────────────────── -->
+<div id="video-detail-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="video-detail-title">
+  <div class="modal" style="max-width:700px">
+    <div class="modal-header">
+      <span class="modal-title" id="video-detail-title">Video Details</span>
+      <button class="modal-close" onclick="BF.closeModal('video-detail-modal')" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body" id="video-detail-body">
+      <!-- Dynamic content -->
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="BF.closeModal('video-detail-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Override Modal ─────────────────────────────────────────── -->
+<div id="override-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="override-title">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header">
+      <span class="modal-title" id="override-title">Override Status</span>
+      <button class="modal-close" onclick="BF.closeModal('override-modal')" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="override-video-id">
+      <div class="form-group">
+        <label class="form-label" for="override-action">New Status</label>
+        <select id="override-action" class="form-select">
+          <option value="allow">Allow</option>
+          <option value="monitor">Monitor</option>
+          <option value="soft_block">Soft Block</option>
+          <option value="block">Block</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="BF.closeModal('override-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitOverride()">Apply Override</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Whitelist Modal ────────────────────────────────────────── -->
+<div id="whitelist-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="wl-title">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <span class="modal-title" id="wl-title">Add to Whitelist</span>
+      <button class="modal-close" onclick="BF.closeModal('whitelist-modal')" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="wl-video-id">
+      <div class="form-group" style="margin-bottom:14px">
+        <label class="form-label">Video</label>
+        <div id="wl-video-name" style="color:var(--text-muted);font-size:0.88rem"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="wl-reason">Reason</label>
+        <textarea id="wl-reason" class="form-input" placeholder="Reason for whitelisting (optional)…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="BF.closeModal('whitelist-modal')">Cancel</button>
+      <button class="btn btn-success" onclick="submitWhitelist()">Add to Whitelist</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+'use strict';
+
+/* ── State ─────────────────────────────────────────────────── */
+let allVideos   = [];
+let filteredVids = [];
+const PAGE_SIZE  = 25;
+let currentPage  = 1;
+let sorter       = null;
+let paginator    = null;
+let videoBulk    = null;
+
+/* ── Load Videos ────────────────────────────────────────────── */
+async function loadVideos(params = {}) {
+  const tbody = document.getElementById('videos-tbody');
+  BF.showLoading(tbody.parentElement, 'Loading videos…');
+
+  try {
+    const qs = new URLSearchParams({ limit: 500, ...params });
+    const data = await BF.fetchJSON(`/api/videos?${qs}`);
+    allVideos = data.items || data || [];
+    filteredVids = [...allVideos];
+    renderTable(filteredVids);
+  } catch (e) {
+    BF.showError(tbody.parentElement, e.message);
+    BF.showToast('Failed to load videos: ' + e.message, 'error');
+  }
+}
+
+/* ── Render Table ────────────────────────────────────────────── */
+function renderTable(videos) {
+  const tbody = document.getElementById('videos-tbody');
+  const start  = (currentPage - 1) * PAGE_SIZE;
+  const page   = videos.slice(start, start + PAGE_SIZE);
+
+  if (!videos.length) {
+    tbody.innerHTML = `<tr><td colspan="11">
+      <div class="empty-state">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="20" height="16" rx="2"/><polygon points="10,8 16,12 10,16"/></svg>
+        <h3>No videos found</h3><p>Try adjusting your filters</p>
+      </div></td></tr>`;
+    document.getElementById('videos-pagination').innerHTML = '';
+    return;
+  }
+
+  tbody.innerHTML = page.map(v => {
+    const keywords = Array.isArray(v.matched_keywords) ? v.matched_keywords : (JSON.parse(v.matched_keywords || '[]'));
+    return `
+      <tr class="expand-row" data-id="${BF.escapeHtml(v.video_id)}">
+        <td onclick="event.stopPropagation()">
+          <input type="checkbox" data-id="${BF.escapeHtml(v.video_id)}" aria-label="Select ${BF.escapeHtml(v.title)}">
+        </td>
+        <td>${BF.thumbEl(v.thumbnail_url, v.title)}</td>
+        <td style="max-width:260px">
+          <div style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${BF.escapeHtml(v.title)}">${BF.escapeHtml(v.title || 'Unknown')}</div>
+          <div style="font-size:0.74rem;color:var(--text-dim);font-family:var(--font-mono)">${BF.escapeHtml(v.video_id)}</div>
+        </td>
+        <td class="muted">${BF.escapeHtml(v.channel_name || v.channel_id || '—')}</td>
+        <td>${BF.scoreBar(v.keyword_score || 0)}</td>
+        <td><span class="score ${BF.scoreColorClass(v.scene_score||0)}">${v.scene_score||0}</span></td>
+        <td><span class="score ${BF.scoreColorClass(v.audio_score||0)}">${v.audio_score||0}</span></td>
+        <td>${BF.scoreBar(v.combined_score || 0)}</td>
+        <td>${BF.statusBadge(v.status)}${v.manual_override ? '<span title="Manual override" style="margin-left:4px;font-size:0.7rem;color:var(--accent)">✎</span>':''}</td>
+        <td class="muted" title="${BF.formatDate(v.analyzed_at)}" style="font-size:0.78rem">${BF.relativeTime(v.analyzed_at)}</td>
+        <td onclick="event.stopPropagation()">
+          <div class="flex flex-gap" style="gap:4px">
+            <button class="btn btn-secondary btn-sm" title="View details" onclick="showVideoDetail('${BF.escapeHtml(v.video_id)}')">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            </button>
+            <button class="btn btn-success btn-sm" title="Whitelist" onclick="openWhitelistModal('${BF.escapeHtml(v.video_id)}','${BF.escapeHtml(v.title || '')}')">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/></svg>
+            </button>
+            <div class="dropdown">
+              <button class="btn btn-secondary btn-sm" onclick="BF.toggleDropdown(this)" aria-haspopup="true" title="Override status">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+              </button>
+              <div class="dropdown-menu">
+                <button class="dropdown-item" onclick="quickOverride('${BF.escapeHtml(v.video_id)}','allow')">✓ Allow</button>
+                <button class="dropdown-item" onclick="quickOverride('${BF.escapeHtml(v.video_id)}','monitor')">◉ Monitor</button>
+                <button class="dropdown-item" onclick="quickOverride('${BF.escapeHtml(v.video_id)}','soft_block')">⚠ Soft Block</button>
+                <button class="dropdown-item danger" onclick="quickOverride('${BF.escapeHtml(v.video_id)}','block')">✕ Block</button>
+              </div>
+            </div>
+          </div>
+        </td>
+      </tr>
+      <!-- Expand row -->
+      <tr class="expand-content" id="expand-${BF.escapeHtml(v.video_id)}">
+        <td colspan="11">
+          <div class="expand-inner">
+            <!-- Score meters -->
+            <div class="detail-section">
+              <h4>Score Breakdown</h4>
+              ${BF.scoreMeter('Keyword', v.keyword_score || 0)}
+              <div style="margin-top:8px">${BF.scoreMeter('Scene', v.scene_score || 0)}</div>
+              <div style="margin-top:8px">${BF.scoreMeter('Audio', v.audio_score || 0)}</div>
+              <div style="margin-top:8px">${BF.scoreMeter('Combined', v.combined_score || 0)}</div>
+            </div>
+            <!-- Keywords -->
+            <div class="detail-section">
+              <h4>Matched Keywords (${keywords.length})</h4>
+              <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">
+                ${keywords.length ? keywords.map(k => `<span class="keyword-tag">${BF.escapeHtml(k)}</span>`).join('') : '<span class="text-dim" style="font-size:0.83rem">None matched</span>'}
+              </div>
+            </div>
+            <!-- Meta -->
+            <div class="detail-section">
+              <h4>Details</h4>
+              <div class="detail-row"><span class="key">Video ID</span><span class="val">${BF.escapeHtml(v.video_id)}</span></div>
+              <div class="detail-row"><span class="key">Channel</span><span class="val">${BF.escapeHtml(v.channel_name || v.channel_id || '—')}</span></div>
+              <div class="detail-row"><span class="key">Status</span><span class="val">${v.status}</span></div>
+              <div class="detail-row"><span class="key">Override</span><span class="val">${v.manual_override ? 'Yes — by ' + BF.escapeHtml(v.override_by || 'admin') : 'No'}</span></div>
+              <div class="detail-row"><span class="key">Analyzed</span><span class="val">${BF.formatDate(v.analyzed_at)}</span></div>
+              <div style="margin-top:10px">
+                <a href="https://www.youtube.com/watch?v=${BF.escapeHtml(v.video_id)}" target="_blank" rel="noopener" class="btn btn-secondary btn-sm">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                  Open on YouTube
+                </a>
+              </div>
+            </div>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  // Bind expand toggles
+  tbody.querySelectorAll('tr.expand-row').forEach(row => {
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('button, a, input, .dropdown')) return;
+      const expandRow = row.nextElementSibling;
+      const isOpen = row.classList.contains('open');
+      // Close all
+      tbody.querySelectorAll('tr.expand-row.open').forEach(r => {
+        r.classList.remove('open');
+        r.nextElementSibling?.classList.remove('open');
+      });
+      if (!isOpen) { row.classList.add('open'); expandRow?.classList.add('open'); }
+    });
+  });
+
+  // Update pagination
+  if (!paginator) {
+    paginator = new BF.Paginator({
+      container: document.getElementById('videos-pagination'),
+      pageSize: PAGE_SIZE,
+      onPage: (page) => { currentPage = page; renderTable(filteredVids); },
+    });
+  }
+  paginator.setTotal(videos.length);
+
+  // Init bulk selector
+  if (!videoBulk) {
+    videoBulk = new BF.BulkSelector('videos-table', 'bulk-bar', handleBulkAction);
+  }
+}
+
+/* ── Filters ─────────────────────────────────────────────────── */
+
+function applyFilters() {
+  const search    = document.getElementById('video-search').value.toLowerCase();
+  const status    = document.getElementById('filter-status').value;
+  const scoreMin  = parseInt(document.getElementById('filter-score-min').value) || 0;
+  const dateFrom  = document.getElementById('filter-date-from').value;
+  const dateTo    = document.getElementById('filter-date-to').value;
+
+  filteredVids = allVideos.filter(v => {
+    if (search && !((v.title || '').toLowerCase().includes(search) || (v.channel_name || '').toLowerCase().includes(search))) return false;
+    if (status && v.status !== status) return false;
+    if ((v.combined_score || 0) < scoreMin) return false;
+    if (dateFrom && v.analyzed_at < dateFrom) return false;
+    if (dateTo   && v.analyzed_at > dateTo + 'T23:59:59') return false;
+    return true;
+  });
+
+  currentPage = 1;
+  renderTable(filteredVids);
+}
+
+function clearFilters() {
+  document.getElementById('video-search').value = '';
+  document.getElementById('filter-status').value = '';
+  document.getElementById('filter-score-min').value = 0;
+  document.getElementById('filter-score-min-val').textContent = '0';
+  document.getElementById('filter-date-from').value = '';
+  document.getElementById('filter-date-to').value = '';
+  filteredVids = [...allVideos];
+  currentPage = 1;
+  renderTable(filteredVids);
+}
+
+/* ── Video Detail Modal ──────────────────────────────────────── */
+
+async function showVideoDetail(videoId) {
+  BF.openModal('video-detail-modal');
+  const body = document.getElementById('video-detail-body');
+  body.innerHTML = '<div class="loading-overlay"><div class="spinner lg"></div></div>';
+
+  try {
+    const v = await BF.fetchJSON(`/api/videos/${videoId}`);
+    const keywords  = Array.isArray(v.matched_keywords) ? v.matched_keywords : (JSON.parse(v.matched_keywords || '[]'));
+    const sceneData = typeof v.scene_details === 'string' ? JSON.parse(v.scene_details || '{}') : (v.scene_details || {});
+    const audioData = typeof v.audio_details === 'string' ? JSON.parse(v.audio_details || '{}') : (v.audio_details || {});
+
+    document.getElementById('video-detail-title').textContent = v.title || 'Video Details';
+    body.innerHTML = `
+      <div style="display:grid;grid-template-columns:${v.thumbnail_url ? '140px 1fr' : '1fr'};gap:16px;margin-bottom:20px">
+        ${v.thumbnail_url ? `<img src="${BF.escapeHtml(v.thumbnail_url)}" alt="" style="width:140px;height:79px;object-fit:cover;border-radius:6px;background:var(--bg-primary)">` : ''}
+        <div>
+          <div style="font-weight:600;font-size:0.95rem;margin-bottom:4px">${BF.escapeHtml(v.title || 'Unknown')}</div>
+          <div style="font-size:0.8rem;color:var(--text-muted)">Channel: ${BF.escapeHtml(v.channel_name || v.channel_id || '—')}</div>
+          <div style="font-size:0.8rem;color:var(--text-muted);font-family:var(--font-mono)">${BF.escapeHtml(v.video_id)}</div>
+          <div style="margin-top:8px">${BF.statusBadge(v.status)}</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+        ${BF.scoreMeter('Keyword Score', v.keyword_score || 0)}
+        ${BF.scoreMeter('Scene Score', v.scene_score || 0)}
+        ${BF.scoreMeter('Audio Score', v.audio_score || 0)}
+        ${BF.scoreMeter('Combined Score', v.combined_score || 0)}
+      </div>
+
+      <div style="margin-bottom:14px">
+        <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;color:var(--text-dim);margin-bottom:8px">Matched Keywords</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">
+          ${keywords.length ? keywords.map(k => `<span class="keyword-tag">${BF.escapeHtml(k)}</span>`).join('') : '<span class="text-dim" style="font-size:0.83rem">No keywords matched</span>'}
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="detail-section">
+          <h4>Scene Analysis</h4>
+          <div class="detail-row"><span class="key">Cuts/min</span><span class="val">${sceneData.cuts_per_minute ?? '—'}</span></div>
+          <div class="detail-row"><span class="key">Total cuts</span><span class="val">${sceneData.total_cuts ?? '—'}</span></div>
+          <div class="detail-row"><span class="key">Avg scene dur.</span><span class="val">${sceneData.avg_scene_duration ? sceneData.avg_scene_duration.toFixed(2)+'s' : '—'}</span></div>
+          <div class="detail-row"><span class="key">Music video</span><span class="val">${sceneData.is_music_video ? 'Yes' : 'No'}</span></div>
+        </div>
+        <div class="detail-section">
+          <h4>Audio Analysis</h4>
+          <div class="detail-row"><span class="key">Loudness RMS</span><span class="val">${audioData.rms_energy != null ? audioData.rms_energy.toFixed(3) : '—'}</span></div>
+          <div class="detail-row"><span class="key">Dynamic range</span><span class="val">${audioData.dynamic_range != null ? audioData.dynamic_range.toFixed(2) : '—'}</span></div>
+          <div class="detail-row"><span class="key">Chaos score</span><span class="val">${audioData.chaos_score ?? '—'}</span></div>
+          <div class="detail-row"><span class="key">Repetitive phrases</span><span class="val">${audioData.repetitive_phrases ?? '—'}</span></div>
+        </div>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+        <a href="https://www.youtube.com/watch?v=${BF.escapeHtml(v.video_id)}" target="_blank" rel="noopener" class="btn btn-secondary btn-sm">Open on YouTube ↗</a>
+        <button class="btn btn-success btn-sm" onclick="openWhitelistModal('${BF.escapeHtml(v.video_id)}','${BF.escapeHtml(v.title||'')}');BF.closeModal('video-detail-modal')">Whitelist</button>
+        <button class="btn btn-warning btn-sm" onclick="openOverrideModal('${BF.escapeHtml(v.video_id)}');BF.closeModal('video-detail-modal')">Override Status</button>
+      </div>
+    `;
+  } catch (e) {
+    body.innerHTML = `<div class="empty-state"><p>Failed to load video details: ${BF.escapeHtml(e.message)}</p></div>`;
+  }
+}
+
+/* ── Override ────────────────────────────────────────────────── */
+
+function openOverrideModal(videoId) {
+  document.getElementById('override-video-id').value = videoId;
+  BF.openModal('override-modal');
+}
+
+async function submitOverride() {
+  const videoId = document.getElementById('override-video-id').value;
+  const action  = document.getElementById('override-action').value;
+  const ok = await BF.overrideVideo(videoId, action);
+  if (ok) {
+    BF.closeModal('override-modal');
+    loadVideos();
+  }
+}
+
+async function quickOverride(videoId, action) {
+  const ok = await BF.overrideVideo(videoId, action);
+  if (ok) loadVideos();
+}
+
+/* ── Whitelist ───────────────────────────────────────────────── */
+
+function openWhitelistModal(videoId, title) {
+  document.getElementById('wl-video-id').value = videoId;
+  document.getElementById('wl-video-name').textContent = title || videoId;
+  document.getElementById('wl-reason').value = '';
+  BF.openModal('whitelist-modal');
+}
+
+async function submitWhitelist() {
+  const videoId = document.getElementById('wl-video-id').value;
+  const reason  = document.getElementById('wl-reason').value.trim();
+  const ok = await BF.whitelistItem('video', videoId, reason);
+  if (ok) {
+    BF.closeModal('whitelist-modal');
+    loadVideos();
+  }
+}
+
+/* ── Bulk Actions ────────────────────────────────────────────── */
+
+async function handleBulkAction(selected, action) {
+  const ids = [...selected];
+  if (!ids.length) return;
+  BF.confirmAction(`Apply "${action}" to ${ids.length} selected video${ids.length > 1 ? 's' : ''}?`, async () => {
+    let success = 0;
+    for (const id of ids) {
+      try {
+        await BF.postJSON('/api/override', { video_id: id, action });
+        success++;
+      } catch {}
+    }
+    BF.showToast(`${success}/${ids.length} videos updated`, success === ids.length ? 'success' : 'warning');
+    videoBulk.clear();
+    loadVideos();
+  });
+}
+
+async function bulkWhitelist() {
+  const ids = [...videoBulk.selected];
+  if (!ids.length) return;
+  BF.confirmAction(`Whitelist ${ids.length} selected video${ids.length > 1 ? 's' : ''}?`, async () => {
+    let success = 0;
+    for (const id of ids) {
+      try { await BF.postJSON('/api/whitelist', { type: 'video', target_id: id, reason: 'Bulk whitelist' }); success++; } catch {}
+    }
+    BF.showToast(`${success}/${ids.length} videos whitelisted`, 'success');
+    videoBulk.clear();
+    loadVideos();
+  }, false);
+}
+
+/* ── Export ──────────────────────────────────────────────────── */
+
+function exportVideosCSV() {
+  BF.exportDataToCSV(filteredVids, [
+    { label: 'Video ID',      key: 'video_id' },
+    { label: 'Title',         key: 'title' },
+    { label: 'Channel',       key: 'channel_name' },
+    { label: 'Keyword Score', key: 'keyword_score' },
+    { label: 'Scene Score',   key: 'scene_score' },
+    { label: 'Audio Score',   key: 'audio_score' },
+    { label: 'Combined Score',key: 'combined_score' },
+    { label: 'Status',        key: 'status' },
+    { label: 'Analyzed At',   key: 'analyzed_at' },
+  ], 'brainrotfilter_videos.csv');
+}
+
+/* ── Init ────────────────────────────────────────────────────── */
+
+document.addEventListener('DOMContentLoaded', () => {
+  BF.initSliders();
+
+  // Live search
+  let searchTimeout;
+  document.getElementById('video-search').addEventListener('input', () => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(applyFilters, 300);
+  });
+
+  document.getElementById('filter-status').addEventListener('change', applyFilters);
+
+  // Check-all
+  document.getElementById('check-all').addEventListener('change', (e) => {
+    document.querySelectorAll('#videos-tbody input[type="checkbox"]').forEach(cb => {
+      cb.checked = e.target.checked;
+    });
+  });
+
+  loadVideos();
+});
+</script>
+{% endblock %}

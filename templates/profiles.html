@@ -1,0 +1,1097 @@
+{% extends "base.html" %}
+{% block title %}Family Profiles{% endblock %}
+{% block page_title %}Family Profiles{% endblock %}
+
+{% block head %}
+<style>
+/* ── Layout ─────────────────────────────────────────────────── */
+.profiles-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.profiles-header h1 {
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+.header-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+/* ── Profile Grid ───────────────────────────────────────────── */
+.profiles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 2rem;
+}
+.profile-card {
+  background: var(--bg-secondary);
+  border: 1px solid rgba(0,180,216,.15);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: border-color .2s;
+}
+.profile-card:hover { border-color: rgba(0,180,216,.35); }
+.profile-card.is-default { border-color: rgba(0,180,216,.5); }
+
+.profile-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem .75rem;
+  gap: .75rem;
+  flex-wrap: wrap;
+}
+.profile-name-row { display: flex; align-items: center; gap: .6rem; }
+.profile-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.default-badge {
+  font-size: .65rem;
+  padding: .15rem .5rem;
+  border-radius: 20px;
+  background: rgba(0,180,216,.15);
+  color: #00b4d8;
+  border: 1px solid rgba(0,180,216,.4);
+}
+
+/* Mode badges */
+.mode-badge {
+  font-size: .72rem;
+  font-weight: 600;
+  padding: .2rem .65rem;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.mode-standard   { background: rgba(0,180,216,.12); color: #00b4d8;  border: 1px solid rgba(0,180,216,.35); }
+.mode-strict     { background: rgba(239,68,68,.12);  color: #ef4444;  border: 1px solid rgba(239,68,68,.35); }
+.mode-monitor    { background: rgba(250,204,21,.12); color: #facc15; border: 1px solid rgba(250,204,21,.35); }
+.mode-disabled   { background: rgba(107,114,128,.12); color: #6b7280; border: 1px solid rgba(107,114,128,.35); }
+
+.profile-card-meta {
+  display: flex;
+  gap: 1.25rem;
+  padding: 0 1.25rem .75rem;
+  font-size: .8rem;
+  color: var(--text-secondary);
+}
+.profile-card-meta span { display: flex; align-items: center; gap: .3rem; }
+
+/* Expand / collapse section */
+.profile-card-body {
+  display: none;
+  border-top: 1px solid rgba(255,255,255,.06);
+  padding: 1rem 1.25rem;
+}
+.profile-card-body.open { display: block; }
+
+/* Threshold rows */
+.threshold-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: .5rem 1rem;
+  margin-bottom: 1rem;
+}
+.threshold-item label {
+  display: block;
+  font-size: .72rem;
+  color: var(--text-secondary);
+  margin-bottom: .2rem;
+}
+.threshold-item .val {
+  font-size: .9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Device list inside card */
+.device-list { margin-bottom: .75rem; }
+.device-list-title {
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  margin-bottom: .4rem;
+}
+.device-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 6px;
+  padding: .2rem .5rem;
+  font-size: .75rem;
+  color: var(--text-primary);
+  margin: .2rem .2rem 0 0;
+}
+.device-chip button {
+  background: none;
+  border: none;
+  color: #ef4444;
+  cursor: pointer;
+  font-size: .8rem;
+  line-height: 1;
+  padding: 0;
+}
+
+/* Card quick-action bar */
+.profile-card-actions {
+  display: flex;
+  gap: .4rem;
+  padding: .75rem 1.25rem;
+  border-top: 1px solid rgba(255,255,255,.06);
+}
+
+/* ── Device Assignment Section ──────────────────────────────── */
+.section-header {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 1rem;
+  margin-top: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+
+.devices-table-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid rgba(255,255,255,.08); }
+table.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .82rem;
+}
+table.data-table th {
+  padding: .65rem 1rem;
+  background: rgba(255,255,255,.04);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  font-size: .68rem;
+  letter-spacing: .05em;
+  text-align: left;
+  font-weight: 600;
+  white-space: nowrap;
+}
+table.data-table td {
+  padding: .6rem 1rem;
+  border-top: 1px solid rgba(255,255,255,.05);
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+table.data-table tbody tr:hover { background: rgba(255,255,255,.03); }
+table.data-table .empty-row td {
+  text-align: center;
+  color: var(--text-secondary);
+  padding: 1.5rem;
+  font-style: italic;
+}
+
+/* ── Schedule Editor ─────────────────────────────────────────── */
+.schedule-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: .35rem;
+  margin-bottom: 1rem;
+}
+.sched-day-header {
+  text-align: center;
+  font-size: .68rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.sched-slot {
+  height: 36px;
+  border-radius: 4px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.08);
+  cursor: pointer;
+  transition: background .15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .65rem;
+  color: var(--text-secondary);
+}
+.sched-slot.active-strict   { background: rgba(239,68,68,.25);  border-color: rgba(239,68,68,.5);  color: #ef4444; }
+.sched-slot.active-monitor  { background: rgba(250,204,21,.2);  border-color: rgba(250,204,21,.5); color: #facc15; }
+.sched-slot.active-disabled { background: rgba(107,114,128,.2); border-color: rgba(107,114,128,.5); color: #9ca3af; }
+
+/* ── Modal ───────────────────────────────────────────────────── */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.65);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--bg-secondary);
+  border: 1px solid rgba(0,180,216,.2);
+  border-radius: 14px;
+  padding: 1.75rem;
+  width: 540px;
+  max-width: calc(100vw - 2rem);
+  max-height: 85vh;
+  overflow-y: auto;
+}
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+}
+.modal-title { font-size: 1.1rem; font-weight: 600; color: var(--text-primary); margin: 0; }
+.modal-close { background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.3rem; line-height: 1; }
+
+.form-row { margin-bottom: 1rem; }
+.form-row label {
+  display: block;
+  font-size: .8rem;
+  color: var(--text-secondary);
+  margin-bottom: .3rem;
+  font-weight: 500;
+}
+.form-row input, .form-row select, .form-row textarea {
+  width: 100%;
+  padding: .55rem .75rem;
+  background: var(--bg-primary);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: .85rem;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+.form-row input:focus, .form-row select:focus {
+  outline: none;
+  border-color: #00b4d8;
+}
+.form-row textarea { min-height: 70px; resize: vertical; }
+
+.form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+.form-hint { font-size: .72rem; color: var(--text-secondary); margin-top: .25rem; }
+
+/* Threshold sliders */
+.threshold-slider-wrap { display: grid; grid-template-columns: 1fr 60px; align-items: center; gap: .5rem; }
+.threshold-slider-wrap input[type=range] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: rgba(255,255,255,.15);
+  border-radius: 2px;
+  outline: none;
+  border: none;
+  padding: 0;
+}
+.threshold-slider-wrap input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: #00b4d8;
+  cursor: pointer;
+}
+.threshold-slider-wrap .slider-val {
+  text-align: right;
+  font-size: .82rem;
+  font-family: 'JetBrains Mono', monospace;
+  color: #00b4d8;
+}
+
+/* ── Misc ──────────────────────────────────────────────────── */
+.empty-state {
+  text-align: center;
+  padding: 3rem 2rem;
+  color: var(--text-secondary);
+}
+.empty-state h3 { color: var(--text-primary); margin-bottom: .5rem; }
+
+.spinner {
+  display: inline-block;
+  width: 16px; height: 16px;
+  border: 2px solid rgba(255,255,255,.2);
+  border-top-color: #00b4d8;
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  vertical-align: middle;
+  margin-right: .4rem;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Toggle */
+.toggle-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: .78rem;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+}
+.toggle-btn:hover { color: #00b4d8; }
+.chevron { transition: transform .2s; }
+.chevron.open { transform: rotate(180deg); }
+
+.active-mode-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  font-size: .78rem;
+  color: var(--text-secondary);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="profiles-header">
+  <h1>Family Profiles</h1>
+  <div class="header-actions">
+    <div style="position:relative;">
+      <button class="btn btn-secondary" onclick="togglePresetDropdown()">
+        From Preset ▾
+      </button>
+      <div id="preset-dropdown" style="display:none;position:absolute;right:0;top:110%;background:var(--bg-secondary);border:1px solid rgba(0,180,216,.25);border-radius:10px;min-width:240px;z-index:200;overflow:hidden;">
+        <!-- populated by JS -->
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="openCreateModal()">+ Create Profile</button>
+  </div>
+</div>
+
+<!-- Profiles grid -->
+<div id="profiles-grid" class="profiles-grid">
+  <div class="empty-state" style="grid-column:1/-1;">
+    <span class="spinner"></span> Loading profiles…
+  </div>
+</div>
+
+<!-- ── Devices Section ─────────────────────────────────────── -->
+<div class="section-header">
+  <span>All Device Assignments</span>
+  <div style="display:flex;gap:.5rem;">
+    <button class="btn btn-secondary btn-sm" onclick="scanNetwork()">Scan Network</button>
+    <button class="btn btn-primary btn-sm" onclick="openDeviceModal()">+ Add Device</button>
+  </div>
+</div>
+
+<div class="devices-table-wrap">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>IP Address</th>
+        <th>MAC Address</th>
+        <th>Device Name</th>
+        <th>Profile</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="devices-tbody">
+      <tr class="empty-row"><td colspan="5">Loading…</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ──────────────────────────────────────────────────────────── -->
+<!-- Create/Edit Profile Modal -->
+<!-- ──────────────────────────────────────────────────────────── -->
+<div id="profile-modal" class="modal-overlay" onclick="closeModalOnBg(event,'profile-modal')">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-title" id="profile-modal-title">Create Profile</h2>
+      <button class="modal-close" onclick="closeModal('profile-modal')">✕</button>
+    </div>
+
+    <form id="profile-form" onsubmit="submitProfileForm(event)">
+      <input type="hidden" id="edit-profile-id" value="">
+
+      <div class="form-row">
+        <label>Profile Name *</label>
+        <input type="text" id="pf-name" placeholder="e.g. Children's Devices" required>
+      </div>
+      <div class="form-row">
+        <label>Description</label>
+        <textarea id="pf-description" placeholder="Optional description"></textarea>
+      </div>
+      <div class="form-row">
+        <label>Response Mode</label>
+        <select id="pf-mode">
+          <option value="standard">Standard — use profile thresholds</option>
+          <option value="strict">Strict — block everything above monitor floor</option>
+          <option value="monitor_only">Monitor Only — log but never block</option>
+          <option value="disabled">Disabled — no filtering for this profile</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>IP Ranges (one per line)</label>
+        <textarea id="pf-ip-ranges" placeholder="192.168.1.0/24&#10;10.0.0.100-10.0.0.150&#10;172.16.0.5"></textarea>
+        <div class="form-hint">Supports single IPs, CIDR notation, and dash-separated ranges.</div>
+      </div>
+
+      <details>
+        <summary style="cursor:pointer;font-size:.85rem;color:var(--text-secondary);margin-bottom:1rem;">
+          Threshold Overrides (optional)
+        </summary>
+        <div id="threshold-sliders" style="margin-top:.75rem;">
+          <!-- Combined threshold -->
+          <div class="form-row">
+            <label>Combined Threshold (block decision boundary)</label>
+            <div class="threshold-slider-wrap">
+              <input type="range" min="0" max="100" value="45" id="sl-combined" oninput="syncSlider('sl-combined','sv-combined')">
+              <span class="slider-val" id="sv-combined">45</span>
+            </div>
+          </div>
+          <div class="form-grid-2">
+            <div class="form-row">
+              <label>Block Min</label>
+              <div class="threshold-slider-wrap">
+                <input type="range" min="0" max="100" value="55" id="sl-block" oninput="syncSlider('sl-block','sv-block')">
+                <span class="slider-val" id="sv-block">55</span>
+              </div>
+            </div>
+            <div class="form-row">
+              <label>Soft Block Min</label>
+              <div class="threshold-slider-wrap">
+                <input type="range" min="0" max="100" value="35" id="sl-soft" oninput="syncSlider('sl-soft','sv-soft')">
+                <span class="slider-val" id="sv-soft">35</span>
+              </div>
+            </div>
+            <div class="form-row">
+              <label>Monitor Min</label>
+              <div class="threshold-slider-wrap">
+                <input type="range" min="0" max="100" value="20" id="sl-monitor" oninput="syncSlider('sl-monitor','sv-monitor')">
+                <span class="slider-val" id="sv-monitor">20</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <div class="form-row" style="margin-top:.5rem;">
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+          <input type="checkbox" id="pf-enabled" checked> Enabled
+        </label>
+      </div>
+      <div class="form-row">
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+          <input type="checkbox" id="pf-default"> Set as default fallback profile
+        </label>
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;gap:.5rem;margin-top:1.25rem;">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('profile-modal')">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="profile-submit-btn">Save Profile</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ──────────────────────────────────────────────────────────── -->
+<!-- Add Device Modal -->
+<!-- ──────────────────────────────────────────────────────────── -->
+<div id="device-modal" class="modal-overlay" onclick="closeModalOnBg(event,'device-modal')">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-title">Assign Device to Profile</h2>
+      <button class="modal-close" onclick="closeModal('device-modal')">✕</button>
+    </div>
+    <form id="device-form" onsubmit="submitDeviceForm(event)">
+      <input type="hidden" id="dev-profile-id" value="">
+      <div class="form-row">
+        <label>Profile *</label>
+        <select id="dev-profile-select" onchange="document.getElementById('dev-profile-id').value=this.value">
+          <!-- populated by JS -->
+        </select>
+      </div>
+      <div class="form-grid-2">
+        <div class="form-row">
+          <label>IP Address</label>
+          <input type="text" id="dev-ip" placeholder="192.168.1.50">
+        </div>
+        <div class="form-row">
+          <label>MAC Address (optional)</label>
+          <input type="text" id="dev-mac" placeholder="aa:bb:cc:dd:ee:ff">
+        </div>
+      </div>
+      <div class="form-row">
+        <label>Device Name</label>
+        <input type="text" id="dev-name" placeholder="e.g. iPad - Living Room">
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:.5rem;margin-top:1rem;">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('device-modal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Assign</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ──────────────────────────────────────────────────────────── -->
+<!-- Schedule Modal -->
+<!-- ──────────────────────────────────────────────────────────── -->
+<div id="schedule-modal" class="modal-overlay" onclick="closeModalOnBg(event,'schedule-modal')">
+  <div class="modal" style="width:600px;">
+    <div class="modal-header">
+      <h2 class="modal-title" id="schedule-modal-title">Edit Schedule</h2>
+      <button class="modal-close" onclick="closeModal('schedule-modal')">✕</button>
+    </div>
+
+    <p style="font-size:.82rem;color:var(--text-secondary);margin-bottom:1rem;">
+      Add time-based mode overrides. Rules are checked in order; the first
+      matching rule overrides the profile's base response mode.
+    </p>
+
+    <div id="schedule-rules-list" style="margin-bottom:1rem;"></div>
+
+    <!-- Add rule form -->
+    <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:.9rem;margin-bottom:1rem;">
+      <div style="font-size:.8rem;font-weight:600;color:var(--text-secondary);margin-bottom:.7rem;text-transform:uppercase;letter-spacing:.04em;">New Rule</div>
+      <div class="form-grid-2">
+        <div class="form-row">
+          <label>Start Time</label>
+          <input type="time" id="sched-start" value="20:00">
+        </div>
+        <div class="form-row">
+          <label>End Time</label>
+          <input type="time" id="sched-end" value="08:00">
+        </div>
+      </div>
+      <div class="form-row">
+        <label>Mode During This Period</label>
+        <select id="sched-mode">
+          <option value="strict">Strict</option>
+          <option value="monitor_only">Monitor Only</option>
+          <option value="standard">Standard</option>
+          <option value="disabled">Disabled</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Days of Week</label>
+        <div id="day-checkboxes" style="display:flex;gap:.6rem;flex-wrap:wrap;margin-top:.25rem;">
+          <!-- Mon–Sun -->
+        </div>
+      </div>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="addScheduleRule()">+ Add Rule</button>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;gap:.5rem;">
+      <button type="button" class="btn btn-secondary" onclick="closeModal('schedule-modal')">Cancel</button>
+      <button type="button" class="btn btn-primary" onclick="saveSchedule()">Save Schedule</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ──────────────────────────────────────────────────────────────
+// State
+// ──────────────────────────────────────────────────────────────
+let profiles = [];
+let currentScheduleProfileId = null;
+let pendingScheduleRules = [];
+
+const DAY_NAMES = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+// ──────────────────────────────────────────────────────────────
+// Init
+// ──────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  loadProfiles();
+  loadAllDevices();
+  loadPresets();
+  buildDayCheckboxes();
+});
+
+// ──────────────────────────────────────────────────────────────
+// API helpers
+// ──────────────────────────────────────────────────────────────
+async function apiGet(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+async function apiPost(url, body) {
+  const r = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.detail || `HTTP ${r.status}`); }
+  return r.json();
+}
+async function apiPut(url, body) {
+  const r = await fetch(url, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.detail || `HTTP ${r.status}`); }
+  return r.json();
+}
+async function apiDelete(url) {
+  const r = await fetch(url, { method:'DELETE' });
+  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.detail || `HTTP ${r.status}`); }
+  return r.json();
+}
+
+// ──────────────────────────────────────────────────────────────
+// Profiles
+// ──────────────────────────────────────────────────────────────
+async function loadProfiles() {
+  try {
+    const data = await apiGet('/api/profiles');
+    profiles = data.profiles || [];
+    renderProfiles();
+    populateProfileSelects();
+  } catch(e) {
+    document.getElementById('profiles-grid').innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><h3>Failed to load profiles</h3><p>${e.message}</p></div>`;
+  }
+}
+
+function renderProfiles() {
+  const grid = document.getElementById('profiles-grid');
+  if (!profiles.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">
+      <h3>No profiles yet</h3>
+      <p>Create your first profile or start from a preset above.</p>
+    </div>`;
+    return;
+  }
+
+  grid.innerHTML = profiles.map(p => {
+    const modeCls = {'standard':'mode-standard','strict':'mode-strict','monitor_only':'mode-monitor','disabled':'mode-disabled'}[p.active_mode||p.response_mode] || 'mode-standard';
+    const modeLabel = {'standard':'Standard','strict':'Strict','monitor_only':'Monitor Only','disabled':'Disabled'}[p.active_mode||p.response_mode] || p.response_mode;
+    const scheduleIcon = p.schedule && p.schedule.length ? '🗓 ' : '';
+    const t = p.thresholds || {};
+    const blockMin = t.block_min ?? 55;
+    const softMin = t.soft_block_min ?? 35;
+    const monitorMin = t.monitor_min ?? 20;
+
+    return `
+<div class="profile-card${p.is_default?' is-default':''}" id="pcard-${p.id}">
+  <div class="profile-card-header">
+    <div class="profile-name-row">
+      <span class="profile-name">${esc(p.name)}</span>
+      ${p.is_default ? '<span class="default-badge">Default</span>' : ''}
+    </div>
+    <div style="display:flex;align-items:center;gap:.5rem;">
+      ${scheduleIcon}<span class="mode-badge ${modeCls}">${modeLabel}</span>
+      <button class="toggle-btn" onclick="toggleCard(${p.id})" aria-label="Expand">
+        <svg class="chevron" id="chev-${p.id}" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="profile-card-meta">
+    <span>📱 ${p.device_count} device${p.device_count!==1?'s':''}</span>
+    <span>🛡 Block ≥${blockMin}</span>
+    <span>⚠ Soft ≥${softMin}</span>
+    <span>👁 Monitor ≥${monitorMin}</span>
+  </div>
+
+  <div class="profile-card-body" id="pbody-${p.id}">
+    <div class="threshold-grid">
+      ${thresholdRow('Combined', t.combined_threshold ?? 45)}
+      ${thresholdRow('Block Min', blockMin)}
+      ${thresholdRow('Soft Min', softMin)}
+      ${thresholdRow('Monitor Min', monitorMin)}
+      ${thresholdRow('Keyword', t.keyword_threshold ?? 40)}
+      ${thresholdRow('Scene', t.scene_threshold ?? 50)}
+    </div>
+    <div class="device-list">
+      <div class="device-list-title">Assigned Devices</div>
+      <div id="pdevices-${p.id}">${renderDeviceChips(p.devices || [])}</div>
+    </div>
+    ${p.schedule && p.schedule.length ? `<div style="font-size:.78rem;color:var(--text-secondary);">${p.schedule.length} schedule rule(s) active</div>` : ''}
+  </div>
+
+  <div class="profile-card-actions">
+    <button class="btn btn-secondary btn-sm" onclick="openEditModal(${p.id})">Edit</button>
+    <button class="btn btn-secondary btn-sm" onclick="openScheduleModal(${p.id})">Schedule</button>
+    <button class="btn btn-secondary btn-sm" onclick="duplicateProfile(${p.id})">Duplicate</button>
+    ${!p.is_default ? `<button class="btn btn-secondary btn-sm" onclick="setDefault(${p.id})">Set Default</button>` : ''}
+    <button class="btn btn-danger btn-sm" onclick="deleteProfile(${p.id})" style="margin-left:auto;">Delete</button>
+  </div>
+</div>`;
+  }).join('');
+}
+
+function thresholdRow(label, val) {
+  return `<div class="threshold-item"><label>${label}</label><span class="val">${val}</span></div>`;
+}
+
+function renderDeviceChips(devices) {
+  if (!devices.length) return '<span style="font-size:.75rem;color:var(--text-secondary);">None assigned</span>';
+  return devices.map(d => `
+    <span class="device-chip">
+      ${esc(d.ip_address || d.mac_address || 'Unknown')}
+      ${d.device_name ? `<em style="opacity:.6">${esc(d.device_name)}</em>` : ''}
+      <button onclick="removeDeviceAssignment(${d.id})" title="Remove">✕</button>
+    </span>`).join('');
+}
+
+function toggleCard(id) {
+  const body = document.getElementById(`pbody-${id}`);
+  const chev = document.getElementById(`chev-${id}`);
+  const isOpen = body.classList.toggle('open');
+  chev.classList.toggle('open', isOpen);
+  // Load devices if opening for the first time
+  if (isOpen) loadProfileDevices(id);
+}
+
+async function loadProfileDevices(profileId) {
+  try {
+    const data = await apiGet(`/api/profiles/${profileId}/devices`);
+    document.getElementById(`pdevices-${profileId}`).innerHTML = renderDeviceChips(data.devices || []);
+  } catch(e) { /* silently ignore */ }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Create / Edit Profile modal
+// ──────────────────────────────────────────────────────────────
+function openCreateModal(prefill = {}) {
+  document.getElementById('profile-modal-title').textContent = 'Create Profile';
+  document.getElementById('edit-profile-id').value = '';
+  document.getElementById('pf-name').value = prefill.name || '';
+  document.getElementById('pf-description').value = prefill.description || '';
+  document.getElementById('pf-mode').value = prefill.response_mode || 'standard';
+  document.getElementById('pf-ip-ranges').value = (prefill.ip_ranges || []).join('\n');
+  document.getElementById('pf-enabled').checked = prefill.enabled !== false;
+  document.getElementById('pf-default').checked = prefill.is_default || false;
+  const t = prefill.thresholds || {};
+  setSlider('sl-combined','sv-combined', t.combined_threshold ?? 45);
+  setSlider('sl-block','sv-block', t.block_min ?? 55);
+  setSlider('sl-soft','sv-soft', t.soft_block_min ?? 35);
+  setSlider('sl-monitor','sv-monitor', t.monitor_min ?? 20);
+  document.getElementById('profile-submit-btn').textContent = 'Create Profile';
+  openModal('profile-modal');
+}
+
+async function openEditModal(profileId) {
+  try {
+    const p = await apiGet(`/api/profiles/${profileId}`);
+    document.getElementById('profile-modal-title').textContent = 'Edit Profile';
+    document.getElementById('edit-profile-id').value = profileId;
+    document.getElementById('pf-name').value = p.name || '';
+    document.getElementById('pf-description').value = p.description || '';
+    document.getElementById('pf-mode').value = p.response_mode || 'standard';
+    document.getElementById('pf-ip-ranges').value = (p.ip_ranges || []).join('\n');
+    document.getElementById('pf-enabled').checked = p.enabled !== false;
+    document.getElementById('pf-default').checked = p.is_default || false;
+    const t = p.thresholds || {};
+    setSlider('sl-combined','sv-combined', t.combined_threshold ?? 45);
+    setSlider('sl-block','sv-block', t.block_min ?? 55);
+    setSlider('sl-soft','sv-soft', t.soft_block_min ?? 35);
+    setSlider('sl-monitor','sv-monitor', t.monitor_min ?? 20);
+    document.getElementById('profile-submit-btn').textContent = 'Save Changes';
+    openModal('profile-modal');
+  } catch(e) { showToast('Failed to load profile: ' + e.message, 'error'); }
+}
+
+async function submitProfileForm(e) {
+  e.preventDefault();
+  const editId = document.getElementById('edit-profile-id').value;
+  const ipRawLines = document.getElementById('pf-ip-ranges').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const body = {
+    name: document.getElementById('pf-name').value.trim(),
+    description: document.getElementById('pf-description').value.trim(),
+    response_mode: document.getElementById('pf-mode').value,
+    ip_ranges: ipRawLines,
+    enabled: document.getElementById('pf-enabled').checked,
+    is_default: document.getElementById('pf-default').checked,
+    thresholds: {
+      combined_threshold: parseInt(document.getElementById('sl-combined').value),
+      block_min: parseInt(document.getElementById('sl-block').value),
+      soft_block_min: parseInt(document.getElementById('sl-soft').value),
+      monitor_min: parseInt(document.getElementById('sl-monitor').value),
+    },
+  };
+  try {
+    if (editId) {
+      await apiPut(`/api/profiles/${editId}`, body);
+      showToast('Profile updated.', 'success');
+    } else {
+      await apiPost('/api/profiles', body);
+      showToast('Profile created.', 'success');
+    }
+    closeModal('profile-modal');
+    loadProfiles();
+    loadAllDevices();
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function deleteProfile(id) {
+  if (!confirm('Delete this profile? Assigned devices will be unlinked.')) return;
+  try {
+    await apiDelete(`/api/profiles/${id}`);
+    showToast('Profile deleted.', 'success');
+    loadProfiles();
+    loadAllDevices();
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function duplicateProfile(id) {
+  const newName = prompt('Name for the duplicate:');
+  if (!newName) return;
+  try {
+    await apiPost(`/api/profiles/${id}/duplicate?new_name=${encodeURIComponent(newName)}`, {});
+    showToast('Profile duplicated.', 'success');
+    loadProfiles();
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function setDefault(id) {
+  try {
+    await apiPost(`/api/profiles/${id}/set-default`, {});
+    showToast('Default profile updated.', 'success');
+    loadProfiles();
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Presets dropdown
+// ──────────────────────────────────────────────────────────────
+async function loadPresets() {
+  try {
+    const data = await apiGet('/api/profiles/presets');
+    const dd = document.getElementById('preset-dropdown');
+    dd.innerHTML = (data.presets || []).map(p => `
+      <div style="padding:.55rem 1rem;cursor:pointer;font-size:.82rem;color:var(--text-primary);border-bottom:1px solid rgba(255,255,255,.05);"
+           onmouseenter="this.style.background='rgba(0,180,216,.08)'"
+           onmouseleave="this.style.background=''"
+           onclick="createFromPreset('${p.key}','${esc(p.name)}')">
+        <div style="font-weight:600">${esc(p.name)}</div>
+        <div style="font-size:.72rem;color:var(--text-secondary);margin-top:.15rem">${esc(p.description||'')}</div>
+      </div>`).join('');
+  } catch(e) { /* ignore */ }
+}
+
+function togglePresetDropdown() {
+  const dd = document.getElementById('preset-dropdown');
+  dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('[onclick*="togglePresetDropdown"]')) {
+    const dd = document.getElementById('preset-dropdown');
+    if (dd) dd.style.display = 'none';
+  }
+});
+
+function createFromPreset(key, name) {
+  document.getElementById('preset-dropdown').style.display = 'none';
+  const presetData = { name, response_mode: 'standard', thresholds: {}, ip_ranges: [] };
+  openCreateModal(presetData);
+  // Store preset key in a hidden field
+  document.getElementById('pf-name').value = name;
+  // Tag the form so submitProfileForm sends preset_key
+  document.getElementById('profile-form').dataset.presetKey = key;
+}
+
+// Override submitProfileForm to include preset_key if set
+const _origSubmit = window.submitProfileForm;
+
+// ──────────────────────────────────────────────────────────────
+// Device assignment
+// ──────────────────────────────────────────────────────────────
+async function loadAllDevices() {
+  try {
+    const data = await apiGet('/api/profiles/devices/all');
+    renderDevicesTable(data.devices || []);
+  } catch(e) {
+    document.getElementById('devices-tbody').innerHTML = `<tr class="empty-row"><td colspan="5">Failed: ${e.message}</td></tr>`;
+  }
+}
+
+function renderDevicesTable(devices) {
+  const tbody = document.getElementById('devices-tbody');
+  if (!devices.length) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="5">No devices assigned yet. Use "Add Device" to assign network devices to profiles.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = devices.map(d => `
+    <tr>
+      <td><code>${esc(d.ip_address || '—')}</code></td>
+      <td><code>${esc(d.mac_address || '—')}</code></td>
+      <td>${esc(d.device_name || '—')}</td>
+      <td><span class="badge">${esc(d.profile_name || '—')}</span></td>
+      <td>
+        <button class="btn btn-danger btn-sm" onclick="removeDeviceAssignment(${d.id})">Remove</button>
+      </td>
+    </tr>`).join('');
+}
+
+function openDeviceModal(prefillIp='', prefillProfileId='') {
+  document.getElementById('dev-ip').value = prefillIp;
+  document.getElementById('dev-mac').value = '';
+  document.getElementById('dev-name').value = '';
+  populateProfileSelects();
+  if (prefillProfileId) document.getElementById('dev-profile-id').value = prefillProfileId;
+  openModal('device-modal');
+}
+
+async function submitDeviceForm(e) {
+  e.preventDefault();
+  const profileId = document.getElementById('dev-profile-id').value ||
+                    document.getElementById('dev-profile-select').value;
+  if (!profileId) { showToast('Select a profile first.', 'error'); return; }
+  const body = {
+    ip_address: document.getElementById('dev-ip').value.trim(),
+    mac_address: document.getElementById('dev-mac').value.trim(),
+    device_name: document.getElementById('dev-name').value.trim(),
+  };
+  try {
+    await apiPost(`/api/profiles/${profileId}/devices`, body);
+    showToast('Device assigned.', 'success');
+    closeModal('device-modal');
+    loadAllDevices();
+    loadProfiles();
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function removeDeviceAssignment(deviceId) {
+  if (!confirm('Remove this device assignment?')) return;
+  // We need the profile ID to call the right endpoint; scan profiles to find it
+  try {
+    const data = await apiGet('/api/profiles/devices/all');
+    const dev = (data.devices||[]).find(d => d.id === deviceId);
+    if (!dev) { showToast('Device not found.', 'error'); return; }
+    await apiDelete(`/api/profiles/${dev.profile_id}/devices/${deviceId}`);
+    showToast('Device removed.', 'success');
+    loadAllDevices();
+    loadProfiles();
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function scanNetwork() {
+  try {
+    const data = await apiGet('/api/profiles/devices/scan');
+    const ips = data.ips || [];
+    if (!ips.length) { showToast('No recent IPs found in request logs.', 'info'); return; }
+    const unassigned = ips.filter(i => !i.profile_id);
+    if (!unassigned.length) { showToast('All recently-seen IPs already have profiles.', 'success'); return; }
+    const ip = unassigned[0].ip;
+    showToast(`${unassigned.length} unassigned IP(s) found. Pre-filling first: ${ip}`, 'info');
+    openDeviceModal(ip);
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+function populateProfileSelects() {
+  const sel = document.getElementById('dev-profile-select');
+  if (!sel) return;
+  sel.innerHTML = profiles.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  if (profiles.length) {
+    sel.value = profiles[0].id;
+    document.getElementById('dev-profile-id').value = profiles[0].id;
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Schedule editor
+// ──────────────────────────────────────────────────────────────
+function buildDayCheckboxes() {
+  const wrap = document.getElementById('day-checkboxes');
+  if (!wrap) return;
+  wrap.innerHTML = DAY_NAMES.map((d,i) => `
+    <label style="display:flex;align-items:center;gap:.25rem;font-size:.8rem;cursor:pointer;">
+      <input type="checkbox" class="sched-day-cb" value="${i}" ${i<5?'checked':''}> ${d}
+    </label>`).join('');
+}
+
+async function openScheduleModal(profileId) {
+  currentScheduleProfileId = profileId;
+  const p = profiles.find(pr => pr.id === profileId);
+  document.getElementById('schedule-modal-title').textContent = `Schedule: ${p ? p.name : profileId}`;
+  pendingScheduleRules = p ? [...(p.schedule || [])] : [];
+  renderScheduleRulesList();
+  openModal('schedule-modal');
+}
+
+function renderScheduleRulesList() {
+  const wrap = document.getElementById('schedule-rules-list');
+  if (!pendingScheduleRules.length) {
+    wrap.innerHTML = '<p style="font-size:.8rem;color:var(--text-secondary);">No schedule rules yet.</p>';
+    return;
+  }
+  wrap.innerHTML = pendingScheduleRules.map((r, i) => {
+    const dayStr = (r.days||[]).map(d => DAY_NAMES[d]).join(', ') || 'All days';
+    const modeLabel = {'standard':'Standard','strict':'Strict','monitor_only':'Monitor Only','disabled':'Disabled'}[r.mode] || r.mode;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:.5rem .75rem;background:rgba(255,255,255,.04);border-radius:7px;margin-bottom:.35rem;font-size:.8rem;">
+      <span><strong>${r.start_time}–${r.end_time}</strong> · ${dayStr} · <span class="mode-badge mode-${r.mode==='monitor_only'?'monitor':r.mode}" style="font-size:.65rem;">${modeLabel}</span></span>
+      <button class="btn btn-danger btn-sm" onclick="removeScheduleRule(${i})">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function addScheduleRule() {
+  const start = document.getElementById('sched-start').value;
+  const end = document.getElementById('sched-end').value;
+  const mode = document.getElementById('sched-mode').value;
+  const days = Array.from(document.querySelectorAll('.sched-day-cb:checked')).map(cb => parseInt(cb.value));
+  if (!days.length) { showToast('Select at least one day.', 'error'); return; }
+  pendingScheduleRules.push({ days, start_time: start, end_time: end, mode });
+  renderScheduleRulesList();
+}
+
+function removeScheduleRule(idx) {
+  pendingScheduleRules.splice(idx, 1);
+  renderScheduleRulesList();
+}
+
+async function saveSchedule() {
+  if (!currentScheduleProfileId) return;
+  try {
+    await apiPost(`/api/profiles/${currentScheduleProfileId}/schedule`, { schedule: pendingScheduleRules });
+    showToast('Schedule saved.', 'success');
+    closeModal('schedule-modal');
+    loadProfiles();
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Slider helpers
+// ──────────────────────────────────────────────────────────────
+function syncSlider(sliderId, valId) {
+  document.getElementById(valId).textContent = document.getElementById(sliderId).value;
+}
+function setSlider(sliderId, valId, val) {
+  document.getElementById(sliderId).value = val;
+  document.getElementById(valId).textContent = val;
+}
+
+// ──────────────────────────────────────────────────────────────
+// Modal helpers
+// ──────────────────────────────────────────────────────────────
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function closeModalOnBg(event, id) { if (event.target.id === id) closeModal(id); }
+
+// ──────────────────────────────────────────────────────────────
+// Toast
+// ──────────────────────────────────────────────────────────────
+function showToast(msg, type='info') {
+  if (window.showToast) { window.showToast(msg, type); return; }
+  const tc = document.getElementById('toast-container');
+  if (!tc) return;
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`;
+  t.textContent = msg;
+  tc.appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+
+// ──────────────────────────────────────────────────────────────
+// Util
+// ──────────────────────────────────────────────────────────────
+function esc(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+{% endblock %}

@@ -1,0 +1,725 @@
+{% extends "base.html" %}
+{% block title %}ML Classifier{% endblock %}
+{% block page_title %}ML Classifier{% endblock %}
+
+{% block head %}
+<style>
+/* ── Layout ─────────────────────────────────────────────────── */
+.ml-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+@media (max-width: 860px) { .ml-grid { grid-template-columns: 1fr; } }
+.ml-full { grid-column: 1 / -1; }
+
+/* ── Cards ───────────────────────────────────────────────────── */
+.ml-card {
+  background: var(--bg-secondary);
+  border: 1px solid rgba(0,180,216,.15);
+  border-radius: 12px;
+  padding: 1.25rem;
+}
+.ml-card-title {
+  font-size: .85rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* ── Status Card ─────────────────────────────────────────────── */
+.status-indicator-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.status-badge-large {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  font-size: 1rem;
+  font-weight: 700;
+  padding: .4rem 1rem;
+  border-radius: 8px;
+}
+.status-trained   { background: rgba(16,185,129,.12); color: #10b981; border: 1px solid rgba(16,185,129,.4); }
+.status-untrained { background: rgba(107,114,128,.12); color: #9ca3af; border: 1px solid rgba(107,114,128,.35); }
+.status-training  { background: rgba(250,204,21,.12);  color: #facc15; border: 1px solid rgba(250,204,21,.4); }
+
+.stat-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .75rem;
+}
+.stat-item { }
+.stat-label {
+  font-size: .72rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin-bottom: .15rem;
+}
+.stat-value {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+}
+.stat-sub {
+  font-size: .72rem;
+  color: var(--text-secondary);
+}
+.accuracy-bar-wrap {
+  height: 8px;
+  background: rgba(255,255,255,.08);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: .4rem;
+}
+.accuracy-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #00b4d8, #10b981);
+  border-radius: 4px;
+  transition: width .5s ease;
+}
+
+/* ── Feature importance chart ────────────────────────────────── */
+.importance-list { list-style: none; margin: 0; padding: 0; }
+.importance-item {
+  display: grid;
+  grid-template-columns: 140px 1fr 44px;
+  align-items: center;
+  gap: .5rem;
+  margin-bottom: .45rem;
+  font-size: .78rem;
+}
+.importance-item .feat-name { color: var(--text-secondary); truncate: ellipsis; overflow: hidden; white-space: nowrap; }
+.importance-bar-wrap {
+  height: 10px;
+  background: rgba(255,255,255,.07);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.importance-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #00b4d8 0%, #48cae4 100%);
+  border-radius: 3px;
+  transition: width .4s ease;
+}
+.importance-val { text-align: right; color: #00b4d8; font-family: 'JetBrains Mono', monospace; font-size: .72rem; }
+
+/* ── Predictions table ───────────────────────────────────────── */
+.preds-table-wrap { overflow-x: auto; max-height: 400px; overflow-y: auto; border-radius: 8px; border: 1px solid rgba(255,255,255,.07); }
+table.preds-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+table.preds-table th {
+  padding: .55rem .85rem;
+  background: rgba(255,255,255,.05);
+  color: var(--text-secondary);
+  font-size: .68rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  text-align: left;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+table.preds-table td { padding: .5rem .85rem; border-top: 1px solid rgba(255,255,255,.05); color: var(--text-primary); vertical-align: middle; }
+table.preds-table tbody tr:hover { background: rgba(255,255,255,.03); }
+.pred-correct   { color: #10b981; }
+.pred-incorrect { color: #ef4444; }
+.pred-unknown   { color: #6b7280; }
+
+/* ── Config sliders ──────────────────────────────────────────── */
+.config-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  padding: .65rem 0;
+  border-bottom: 1px solid rgba(255,255,255,.05);
+}
+.config-row:last-child { border-bottom: none; }
+.config-label { font-size: .85rem; color: var(--text-primary); flex: 1; }
+.config-sub { font-size: .72rem; color: var(--text-secondary); display: block; margin-top: .1rem; }
+.weight-slider-wrap { display: flex; align-items: center; gap: .5rem; width: 180px; }
+.weight-slider-wrap input[type=range] {
+  -webkit-appearance: none;
+  flex: 1;
+  height: 4px;
+  background: rgba(255,255,255,.15);
+  border-radius: 2px;
+  outline: none;
+  border: none;
+  padding: 0;
+}
+.weight-slider-wrap input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 15px; height: 15px;
+  border-radius: 50%;
+  background: #00b4d8;
+  cursor: pointer;
+}
+.weight-val { font-size: .82rem; font-family: 'JetBrains Mono', monospace; color: #00b4d8; width: 36px; text-align: right; }
+.toggle-switch {
+  position: relative;
+  width: 44px; height: 24px;
+}
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.slider-thumb {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: rgba(255,255,255,.15);
+  border-radius: 12px;
+  transition: .25s;
+}
+.slider-thumb:before {
+  content: '';
+  position: absolute;
+  width: 18px; height: 18px;
+  left: 3px; bottom: 3px;
+  background: white;
+  border-radius: 50%;
+  transition: .25s;
+}
+.toggle-switch input:checked + .slider-thumb { background: #00b4d8; }
+.toggle-switch input:checked + .slider-thumb:before { transform: translateX(20px); }
+
+/* ── Model history ───────────────────────────────────────────── */
+.version-list { list-style: none; padding: 0; margin: 0; }
+.version-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .5rem 0;
+  border-bottom: 1px solid rgba(255,255,255,.05);
+  font-size: .78rem;
+  gap: .5rem;
+}
+.version-item:last-child { border-bottom: none; }
+.version-name { font-family: 'JetBrains Mono', monospace; color: var(--text-secondary); }
+.version-size { color: var(--text-secondary); white-space: nowrap; }
+
+/* ── Training progress ───────────────────────────────────────── */
+.train-progress { display: none; align-items: center; gap: .75rem; padding: .75rem 0; }
+.train-progress.show { display: flex; }
+.spinner { display: inline-block; width: 18px; height: 18px; border: 2.5px solid rgba(255,255,255,.15); border-top-color: #00b4d8; border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Data stats ──────────────────────────────────────────────── */
+.class-bar-wrap { height: 12px; background: rgba(255,255,255,.08); border-radius: 6px; overflow: hidden; margin: .5rem 0 .25rem; }
+.class-bar-inner { height: 100%; background: linear-gradient(90deg, #ef4444 0%, #ef4444 var(--brainrot-pct, 50%), rgba(255,255,255,.15) var(--brainrot-pct, 50%), rgba(255,255,255,.15) 100%); }
+
+/* ── Toast override ──────────────────────────────────────────── */
+.toast { padding: .6rem 1rem; border-radius: 8px; font-size: .82rem; margin-bottom: .4rem; animation: fadeIn .2s ease; }
+.toast-success { background: rgba(16,185,129,.15); border: 1px solid rgba(16,185,129,.4); color: #10b981; }
+.toast-error   { background: rgba(239,68,68,.15);  border: 1px solid rgba(239,68,68,.4);  color: #ef4444; }
+.toast-info    { background: rgba(0,180,216,.12);  border: 1px solid rgba(0,180,216,.35); color: #00b4d8; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ml-grid">
+
+  <!-- ── Status Card ───────────────────────────────────────── -->
+  <div class="ml-card">
+    <div class="ml-card-title">
+      Model Status
+      <button class="btn btn-primary btn-sm" id="train-btn" onclick="trainModel()">Train Model</button>
+    </div>
+
+    <div class="status-indicator-row">
+      <div class="status-badge-large status-untrained" id="model-status-badge">
+        <span id="model-status-icon">○</span>
+        <span id="model-status-text">Not Trained</span>
+      </div>
+    </div>
+
+    <div class="train-progress" id="train-progress">
+      <div class="spinner"></div>
+      <span style="font-size:.85rem;color:var(--text-secondary);">Training in progress…</span>
+    </div>
+
+    <div class="stat-grid-2">
+      <div class="stat-item">
+        <div class="stat-label">CV Accuracy</div>
+        <div class="stat-value" id="stat-accuracy">—</div>
+        <div class="accuracy-bar-wrap"><div class="accuracy-bar" id="accuracy-bar" style="width:0%"></div></div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Training Samples</div>
+        <div class="stat-value" id="stat-samples">—</div>
+        <div class="stat-sub" id="stat-samples-sub">Manual override labels</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Last Trained</div>
+        <div class="stat-value" style="font-size:.85rem;" id="stat-trained-at">—</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">New Overrides</div>
+        <div class="stat-value" id="stat-overrides-since">—</div>
+        <div class="stat-sub">since last train</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Training Data Stats ───────────────────────────────── -->
+  <div class="ml-card">
+    <div class="ml-card-title">Training Data</div>
+
+    <div class="stat-grid-2">
+      <div class="stat-item">
+        <div class="stat-label">Total Labels</div>
+        <div class="stat-value" id="ds-total">—</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">sklearn Available</div>
+        <div class="stat-value" id="ds-sklearn">—</div>
+      </div>
+    </div>
+
+    <div style="margin-top:1rem;">
+      <div style="font-size:.78rem;color:var(--text-secondary);margin-bottom:.3rem;">Class Balance</div>
+      <div class="class-bar-wrap">
+        <div class="class-bar-inner" id="class-bar"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:.72rem;color:var(--text-secondary);">
+        <span><span style="color:#ef4444">■</span> Brainrot: <span id="ds-brainrot">—</span></span>
+        <span>Not brainrot: <span id="ds-not-brainrot">—</span></span>
+      </div>
+    </div>
+
+    <div style="margin-top:1rem;">
+      <button class="btn btn-secondary btn-sm" onclick="checkRetrain()">Check Retrain Needed</button>
+      <span id="retrain-hint" style="font-size:.78rem;color:var(--text-secondary);margin-left:.6rem;"></span>
+    </div>
+  </div>
+
+  <!-- ── Feature Importance ────────────────────────────────── -->
+  <div class="ml-card">
+    <div class="ml-card-title">Feature Importance</div>
+    <ul class="importance-list" id="importance-list">
+      <li style="color:var(--text-secondary);font-size:.82rem;font-style:italic;">Train the model to see feature importance.</li>
+    </ul>
+  </div>
+
+  <!-- ── Configuration ─────────────────────────────────────── -->
+  <div class="ml-card">
+    <div class="ml-card-title">Configuration</div>
+
+    <div class="config-row">
+      <div>
+        <div class="config-label">Enable ML Scoring</div>
+        <span class="config-sub">Add ML score to combined score calculation</span>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" id="cfg-ml-enabled" onchange="saveMlConfig()">
+        <span class="slider-thumb"></span>
+      </label>
+    </div>
+
+    <div class="config-row">
+      <div>
+        <div class="config-label">ML Score Weight</div>
+        <span class="config-sub">Weight in combined score (0 = disabled)</span>
+      </div>
+      <div class="weight-slider-wrap">
+        <input type="range" min="0" max="0.5" step="0.01" value="0.0"
+               id="cfg-ml-weight" oninput="syncWeight()">
+        <span class="weight-val" id="cfg-ml-weight-val">0.00</span>
+      </div>
+    </div>
+
+    <div class="config-row">
+      <div>
+        <div class="config-label">Auto-Retrain</div>
+        <span class="config-sub">Automatically retrain after 10 new overrides</span>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" id="cfg-auto-retrain" checked onchange="saveMlConfig()">
+        <span class="slider-thumb"></span>
+      </label>
+    </div>
+
+    <div class="config-row">
+      <div>
+        <div class="config-label">Min Training Samples</div>
+        <span class="config-sub">Skip training if fewer labeled examples</span>
+      </div>
+      <input type="number" id="cfg-min-samples" value="20" min="10" max="500"
+             style="width:72px;padding:.35rem .5rem;background:var(--bg-primary);border:1px solid rgba(255,255,255,.12);border-radius:6px;color:var(--text-primary);font-size:.82rem;text-align:center;"
+             onchange="saveMlConfig()">
+    </div>
+
+    <div style="margin-top:.75rem;display:flex;gap:.5rem;justify-content:flex-end;">
+      <button class="btn btn-primary btn-sm" onclick="saveMlConfig()">Save Config</button>
+    </div>
+  </div>
+
+  <!-- ── Recent Predictions ────────────────────────────────── -->
+  <div class="ml-card ml-full">
+    <div class="ml-card-title">
+      Recent Predictions
+      <button class="btn btn-secondary btn-sm" onclick="loadPredictions()">Refresh</button>
+    </div>
+    <div class="preds-table-wrap">
+      <table class="preds-table">
+        <thead>
+          <tr>
+            <th>Video</th>
+            <th>ML Score</th>
+            <th>Prediction</th>
+            <th>Confidence</th>
+            <th>Actual Status</th>
+            <th>Correct?</th>
+          </tr>
+        </thead>
+        <tbody id="preds-tbody">
+          <tr><td colspan="6" style="text-align:center;color:var(--text-secondary);padding:1.5rem;font-style:italic;">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Model History ─────────────────────────────────────── -->
+  <div class="ml-card">
+    <div class="ml-card-title">
+      Model History
+      <button class="btn btn-secondary btn-sm" onclick="rollbackModel()">Rollback</button>
+    </div>
+    <ul class="version-list" id="version-list">
+      <li style="color:var(--text-secondary);font-size:.82rem;font-style:italic;">No versions found.</li>
+    </ul>
+  </div>
+
+  <!-- ── Retrain Hint ───────────────────────────────────────── -->
+  <div class="ml-card" id="retrain-card" style="display:none;">
+    <div class="ml-card-title" style="color:#facc15;">Retraining Recommended</div>
+    <p style="font-size:.85rem;color:var(--text-secondary);margin-bottom:1rem;" id="retrain-reason"></p>
+    <button class="btn btn-primary" onclick="trainModel()">Train Now</button>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ──────────────────────────────────────────────────────────────
+// Init
+// ──────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  loadStatus();
+  loadPredictions();
+  loadVersions();
+  loadMlConfig();
+  // Poll status every 5s while training
+  setInterval(pollStatus, 5000);
+});
+
+let _trainingInProgress = false;
+
+// ──────────────────────────────────────────────────────────────
+// Status
+// ──────────────────────────────────────────────────────────────
+async function loadStatus() {
+  try {
+    const s = await apiGet('/api/ml/status');
+    renderStatus(s);
+    loadImportance();
+  } catch(e) { console.warn('ML status failed:', e.message); }
+}
+
+async function pollStatus() {
+  if (!_trainingInProgress) return;
+  await loadStatus();
+}
+
+function renderStatus(s) {
+  _trainingInProgress = s.training_in_progress || false;
+
+  // Badge
+  const badge = document.getElementById('model-status-badge');
+  const text = document.getElementById('model-status-text');
+  const icon = document.getElementById('model-status-icon');
+  const progress = document.getElementById('train-progress');
+
+  if (_trainingInProgress) {
+    badge.className = 'status-badge-large status-training';
+    text.textContent = 'Training…'; icon.textContent = '⟳';
+    progress.classList.add('show');
+    document.getElementById('train-btn').disabled = true;
+  } else if (s.trained) {
+    badge.className = 'status-badge-large status-trained';
+    text.textContent = 'Trained'; icon.textContent = '✓';
+    progress.classList.remove('show');
+    document.getElementById('train-btn').disabled = false;
+  } else {
+    badge.className = 'status-badge-large status-untrained';
+    text.textContent = 'Not Trained'; icon.textContent = '○';
+    progress.classList.remove('show');
+    document.getElementById('train-btn').disabled = false;
+  }
+
+  // Stats
+  const acc = s.trained ? (s.accuracy * 100).toFixed(1) + '%' : '—';
+  document.getElementById('stat-accuracy').textContent = acc;
+  document.getElementById('accuracy-bar').style.width = s.trained ? (s.accuracy * 100) + '%' : '0%';
+  document.getElementById('stat-samples').textContent = s.samples ?? '—';
+  document.getElementById('stat-samples-sub').textContent =
+    s.trained ? `${s.n_brainrot || 0} brainrot / ${s.n_not_brainrot || 0} not` : 'Manual override labels';
+  document.getElementById('stat-trained-at').textContent =
+    s.trained_at ? new Date(s.trained_at).toLocaleString() : '—';
+  document.getElementById('stat-overrides-since').textContent =
+    s.overrides_since_last_train ?? '—';
+
+  // Dataset stats
+  document.getElementById('ds-sklearn').textContent = s.sklearn_available ? '✓ Yes' : '✗ No';
+  document.getElementById('ds-sklearn').style.color = s.sklearn_available ? '#10b981' : '#ef4444';
+  const tot = s.total_manual_overrides ?? 0;
+  const br = s.available_brainrot_labels ?? 0;
+  const notbr = s.available_not_brainrot_labels ?? 0;
+  document.getElementById('ds-total').textContent = tot;
+  document.getElementById('ds-brainrot').textContent = br;
+  document.getElementById('ds-not-brainrot').textContent = notbr;
+  const pct = tot > 0 ? (br / tot * 100).toFixed(0) : 50;
+  document.getElementById('class-bar').style.setProperty('--brainrot-pct', pct + '%');
+}
+
+// ──────────────────────────────────────────────────────────────
+// Training
+// ──────────────────────────────────────────────────────────────
+async function trainModel() {
+  if (_trainingInProgress) return;
+  _trainingInProgress = true;
+  document.getElementById('train-btn').disabled = true;
+  document.getElementById('train-progress').classList.add('show');
+
+  try {
+    const result = await apiPost('/api/ml/train', {});
+    if (result.trained) {
+      showToast(`Model trained! Accuracy: ${(result.accuracy * 100).toFixed(1)}% on ${result.samples} samples.`, 'success');
+    } else {
+      showToast(result.message || 'Training failed.', 'error');
+    }
+    loadStatus();
+    loadImportance();
+    loadVersions();
+  } catch(e) {
+    showToast('Training error: ' + e.message, 'error');
+  } finally {
+    _trainingInProgress = false;
+    document.getElementById('train-btn').disabled = false;
+    document.getElementById('train-progress').classList.remove('show');
+    loadStatus();
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Feature Importance
+// ──────────────────────────────────────────────────────────────
+async function loadImportance() {
+  try {
+    const data = await apiGet('/api/ml/importance');
+    renderImportance(data.features || []);
+  } catch(e) { console.warn('Importance load failed:', e.message); }
+}
+
+function renderImportance(features) {
+  const list = document.getElementById('importance-list');
+  if (!features.length || features.every(f => f.importance === 0)) {
+    list.innerHTML = '<li style="color:var(--text-secondary);font-size:.82rem;font-style:italic;">Train the model to see feature importance.</li>';
+    return;
+  }
+  const maxVal = Math.max(...features.map(f => f.importance), 1);
+  list.innerHTML = features.slice(0, 15).map(f => {
+    const barW = Math.round((f.importance / maxVal) * 100);
+    const name = f.name.replace(/_/g, ' ');
+    return `<li class="importance-item">
+      <span class="feat-name" title="${esc(f.name)}">${esc(name)}</span>
+      <div class="importance-bar-wrap"><div class="importance-bar" style="width:${barW}%"></div></div>
+      <span class="importance-val">${f.importance.toFixed(1)}%</span>
+    </li>`;
+  }).join('');
+}
+
+// ──────────────────────────────────────────────────────────────
+// Predictions table
+// ──────────────────────────────────────────────────────────────
+async function loadPredictions() {
+  try {
+    const data = await apiGet('/api/ml/predictions?limit=30');
+    renderPredictions(data.predictions || []);
+  } catch(e) {
+    document.getElementById('preds-tbody').innerHTML =
+      `<tr><td colspan="6" style="text-align:center;color:var(--text-secondary);padding:1.5rem;">${esc(e.message)}</td></tr>`;
+  }
+}
+
+function renderPredictions(preds) {
+  const tbody = document.getElementById('preds-tbody');
+  if (!preds.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-secondary);padding:1.5rem;font-style:italic;">No predictions yet. Train the model first.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = preds.map(p => {
+    const score = typeof p.ml_score === 'number' ? p.ml_score.toFixed(1) : '—';
+    const conf = typeof p.ml_confidence === 'number' ? (p.ml_confidence * 100).toFixed(0) + '%' : '—';
+    const predLabel = p.ml_prediction === 'brainrot' ? '🔴 Brainrot' : '🟢 Clean';
+    const actualLabel = {
+      'block': '🔴 Blocked', 'soft_block': '🟠 Soft Block',
+      'monitor': '🟡 Monitor', 'allow': '🟢 Allow', 'pending': '⚪ Pending'
+    }[p.actual_status] || p.actual_status || '—';
+    let correctCell = '<span class="pred-unknown">—</span>';
+    if (p.ml_correct === true)  correctCell = '<span class="pred-correct">✓ Yes</span>';
+    if (p.ml_correct === false) correctCell = '<span class="pred-incorrect">✗ No</span>';
+
+    const titleDisplay = p.title ? esc(p.title.substring(0, 45)) + (p.title.length > 45 ? '…' : '') : esc(p.video_id || '—');
+
+    return `<tr>
+      <td title="${esc(p.title || '')}">${titleDisplay}</td>
+      <td><span style="font-family:'JetBrains Mono',monospace;">${score}</span></td>
+      <td>${p.ml_prediction ? predLabel : '—'}</td>
+      <td>${conf}</td>
+      <td>${actualLabel}${p.manual_override ? ' <span style="font-size:.65rem;color:#00b4d8;">(override)</span>' : ''}</td>
+      <td>${correctCell}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ──────────────────────────────────────────────────────────────
+// Model versions
+// ──────────────────────────────────────────────────────────────
+async function loadVersions() {
+  try {
+    const data = await apiGet('/api/ml/versions');
+    renderVersions(data.versions || []);
+  } catch(e) { /* ignore */ }
+}
+
+function renderVersions(versions) {
+  const list = document.getElementById('version-list');
+  if (!versions.length) {
+    list.innerHTML = '<li style="color:var(--text-secondary);font-size:.82rem;font-style:italic;">No versions found.</li>';
+    return;
+  }
+  list.innerHTML = versions.map((v, i) => `
+    <li class="version-item">
+      <span class="version-name">${esc(v.name)}</span>
+      <span class="version-size">${v.size_kb} KB</span>
+      <button class="btn btn-secondary btn-sm" onclick="rollbackModel('${esc(v.name)}')">${i === 0 ? 'Active' : 'Restore'}</button>
+    </li>`).join('');
+}
+
+async function rollbackModel(versionName) {
+  const label = versionName || 'previous version';
+  if (!confirm(`Roll back to ${label}? The current model will be replaced.`)) return;
+  try {
+    const result = await apiPost('/api/ml/rollback', { version_name: versionName || null });
+    showToast(result.message || 'Rollback successful.', 'success');
+    loadStatus();
+    loadImportance();
+    loadVersions();
+  } catch(e) { showToast('Rollback failed: ' + e.message, 'error'); }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Retrain check
+// ──────────────────────────────────────────────────────────────
+async function checkRetrain() {
+  try {
+    const data = await apiGet('/api/ml/check-retrain');
+    const hint = document.getElementById('retrain-hint');
+    if (data.retrain_needed) {
+      hint.textContent = '⚠ Retraining recommended.';
+      hint.style.color = '#facc15';
+      document.getElementById('retrain-card').style.display = 'block';
+      document.getElementById('retrain-reason').textContent = data.reason || '';
+    } else {
+      hint.textContent = '✓ No retraining needed.';
+      hint.style.color = '#10b981';
+      document.getElementById('retrain-card').style.display = 'none';
+    }
+  } catch(e) { showToast('Check failed: ' + e.message, 'error'); }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Config
+// ──────────────────────────────────────────────────────────────
+async function loadMlConfig() {
+  try {
+    const data = await apiGet('/api/settings');
+    document.getElementById('cfg-ml-enabled').checked = !!data.ml_scoring_enabled;
+    const weight = parseFloat(data.ml_weight || 0);
+    document.getElementById('cfg-ml-weight').value = weight;
+    document.getElementById('cfg-ml-weight-val').textContent = weight.toFixed(2);
+    document.getElementById('cfg-auto-retrain').checked = data.ml_auto_retrain !== false;
+    if (data.ml_min_samples) document.getElementById('cfg-min-samples').value = data.ml_min_samples;
+  } catch(e) { /* settings may not exist yet */ }
+}
+
+async function saveMlConfig() {
+  const body = {
+    ml_scoring_enabled: document.getElementById('cfg-ml-enabled').checked,
+    ml_weight: parseFloat(document.getElementById('cfg-ml-weight').value),
+    ml_auto_retrain: document.getElementById('cfg-auto-retrain').checked,
+    ml_min_samples: parseInt(document.getElementById('cfg-min-samples').value),
+  };
+  try {
+    await apiPut('/api/settings', body);
+    showToast('ML configuration saved.', 'success');
+  } catch(e) { showToast('Save failed: ' + e.message, 'error'); }
+}
+
+function syncWeight() {
+  const val = parseFloat(document.getElementById('cfg-ml-weight').value).toFixed(2);
+  document.getElementById('cfg-ml-weight-val').textContent = val;
+}
+
+// ──────────────────────────────────────────────────────────────
+// API helpers
+// ──────────────────────────────────────────────────────────────
+async function apiGet(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+async function apiPost(url, body) {
+  const r = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.detail || `HTTP ${r.status}`); }
+  return r.json();
+}
+async function apiPut(url, body) {
+  const r = await fetch(url, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.detail || `HTTP ${r.status}`); }
+  return r.json();
+}
+
+// ──────────────────────────────────────────────────────────────
+// Util
+// ──────────────────────────────────────────────────────────────
+function showToast(msg, type='info') {
+  if (window.showToast) { window.showToast(msg, type); return; }
+  const tc = document.getElementById('toast-container');
+  if (!tc) return;
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`;
+  t.textContent = msg;
+  tc.appendChild(t);
+  setTimeout(() => t.remove(), 4500);
+}
+
+function esc(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+{% endblock %}

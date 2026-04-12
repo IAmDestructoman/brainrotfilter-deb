@@ -1,0 +1,1826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BrainrotFilter - Setup Wizard</title>
+<style>
+:root {
+  --bg-primary: #0f1729;
+  --bg-card: #1a2332;
+  --bg-input: #0d1520;
+  --border: rgba(0,180,216,0.15);
+  --border-active: rgba(0,180,216,0.5);
+  --accent: #00b4d8;
+  --accent-glow: rgba(0,180,216,0.2);
+  --accent-hover: #0096c7;
+  --success: #22c55e;
+  --error: #ef4444;
+  --warning: #f59e0b;
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --radius: 12px;
+  --radius-sm: 8px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.wizard-outer {
+  width: 100%;
+  max-width: 860px;
+  padding: 24px 16px 40px;
+}
+
+.wizard-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.wizard-header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+.wizard-header p {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* Step indicator */
+.step-indicator {
+  display: flex;
+  justify-content: center;
+  gap: 0;
+  margin-bottom: 32px;
+  padding: 0 20px;
+}
+
+.step-dot-wrap {
+  display: flex;
+  align-items: center;
+}
+
+.step-dot {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  border: 2px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  transition: all 0.3s;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.step-dot.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+.step-dot.done {
+  border-color: var(--success);
+  background: var(--success);
+  color: #fff;
+}
+
+.step-connector {
+  width: 40px;
+  height: 2px;
+  background: var(--border);
+  transition: background 0.3s;
+}
+
+.step-connector.filled { background: var(--success); }
+
+/* Card */
+.wizard-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 32px;
+  position: relative;
+  overflow: hidden;
+}
+
+.step-panel { display: none; }
+.step-panel.active { display: block; animation: fadeIn 0.3s ease; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.step-title {
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: var(--text-primary);
+}
+
+.step-subtitle {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+
+/* Form elements */
+label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+input[type="text"], input[type="password"], input[type="number"], select {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+input:focus, select:focus { border-color: var(--accent); }
+
+.form-group { margin-bottom: 18px; }
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.form-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-secondary {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.btn-secondary:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn-sm { padding: 6px 14px; font-size: 13px; }
+
+/* Navigation */
+.wizard-nav {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+/* Status badges */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.status-badge.success { background: rgba(34,197,94,0.15); color: var(--success); }
+.status-badge.error { background: rgba(239,68,68,0.15); color: var(--error); }
+.status-badge.warning { background: rgba(245,158,11,0.15); color: var(--warning); }
+.status-badge.pending { background: rgba(100,116,139,0.15); color: var(--text-muted); }
+
+/* Connection result */
+.connection-result {
+  margin-top: 12px;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  display: none;
+}
+
+.connection-result.show { display: block; }
+.connection-result.success { background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.3); color: var(--success); }
+.connection-result.error { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: var(--error); }
+
+/* Sliders */
+.slider-group { margin-bottom: 16px; }
+
+.slider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.slider-label { font-size: 13px; color: var(--text-secondary); font-weight: 500; }
+.slider-value { font-size: 14px; color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+input[type="range"] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-input);
+  outline: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid var(--bg-card);
+}
+
+/* Checklist */
+.checklist { list-style: none; padding: 0; }
+
+.checklist li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  font-size: 14px;
+}
+
+.checklist li:last-child { border-bottom: none; }
+
+.check-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.check-icon.done { background: rgba(34,197,94,0.2); color: var(--success); }
+.check-icon.will { background: rgba(0,180,216,0.2); color: var(--accent); }
+.check-icon.skip { background: rgba(100,116,139,0.2); color: var(--text-muted); }
+
+/* Progress steps */
+.progress-steps { margin-top: 20px; }
+
+.progress-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+  background: rgba(255,255,255,0.02);
+  font-size: 14px;
+  transition: background 0.3s;
+}
+
+.progress-step.running { background: rgba(0,180,216,0.08); }
+.progress-step.done { background: rgba(34,197,94,0.06); }
+.progress-step.error { background: rgba(239,68,68,0.08); }
+
+.progress-step-icon {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* Success page */
+.success-hero {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.success-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: rgba(34,197,94,0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+  font-size: 36px;
+}
+
+.success-hero h2 {
+  font-size: 26px;
+  color: var(--success);
+  margin-bottom: 8px;
+}
+
+.success-links {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.success-link {
+  display: block;
+  padding: 16px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  text-align: center;
+  transition: border-color 0.2s;
+}
+
+.success-link:hover { border-color: var(--accent); }
+.success-link .link-label { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+.success-link .link-url { font-size: 14px; color: var(--accent); word-break: break-all; }
+
+/* Quick test */
+.quick-test {
+  margin-top: 24px;
+  padding: 16px;
+  background: rgba(0,180,216,0.06);
+  border: 1px solid rgba(0,180,216,0.15);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.quick-test strong { color: var(--text-primary); }
+
+/* Keyword table */
+.keyword-controls {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.keyword-controls input[type="text"] {
+  flex: 1;
+  min-width: 180px;
+}
+
+.keyword-table-wrap {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.keyword-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.keyword-table th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-input);
+  padding: 8px 12px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+.keyword-table td {
+  padding: 6px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+
+.keyword-table tr:hover { background: rgba(255,255,255,0.02); }
+
+.kw-weight {
+  width: 50px;
+  padding: 4px 6px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-align: center;
+}
+
+.kw-delete {
+  background: none;
+  border: none;
+  color: var(--error);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.kw-delete:hover { background: rgba(239,68,68,0.15); }
+
+/* Credit banner */
+.credit-banner {
+  text-align: center;
+  padding: 16px;
+  margin-top: 24px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.credit-banner a { color: var(--accent); text-decoration: none; }
+.credit-banner a:hover { text-decoration: underline; }
+
+/* Expandable step details */
+.step-details {
+  margin-top: 6px;
+  margin-left: 36px;
+}
+
+.step-details summary {
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.step-details summary:hover { color: var(--accent); }
+
+.step-log {
+  margin-top: 4px;
+  padding: 8px 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  max-height: 120px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.copy-log-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 6px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.copy-log-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* SSL pinning option cards */
+.ssl-pinning-option {
+  margin-bottom: 10px;
+  padding: 14px 16px;
+  background: rgba(0,180,216,0.04);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.ssl-pinning-option:has(input:checked) {
+  border-color: var(--accent);
+  background: rgba(0,180,216,0.08);
+}
+
+.ssl-pinning-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ssl-pinning-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ssl-pinning-title strong { color: var(--text-primary); font-size: 14px; }
+
+.ssl-pinning-desc {
+  margin-top: 8px;
+  margin-left: 56px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.badge-easy { background: rgba(34,197,94,0.15); color: var(--success); }
+.badge-moderate { background: rgba(245,158,11,0.15); color: var(--warning); }
+.badge-enterprise { background: rgba(139,92,246,0.15); color: #a78bfa; }
+.badge-strict { background: rgba(239,68,68,0.15); color: var(--error); }
+
+/* Progress banners */
+.progress-banner {
+  margin-top: 16px;
+  padding: 14px 18px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  display: none;
+}
+
+.progress-banner.show { display: block; }
+
+.progress-banner.banner-success {
+  background: rgba(34,197,94,0.1);
+  border: 1px solid rgba(34,197,94,0.3);
+  color: var(--success);
+}
+
+.progress-banner.banner-error {
+  background: rgba(239,68,68,0.1);
+  border: 1px solid rgba(239,68,68,0.3);
+  color: var(--error);
+}
+
+.progress-banner .banner-actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+}
+
+/* Success page log section */
+.setup-log-section {
+  margin-top: 20px;
+  text-align: left;
+}
+
+.setup-log-section summary {
+  font-size: 14px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 8px 0;
+  user-select: none;
+}
+
+.setup-log-section summary:hover { color: var(--accent); }
+
+.setup-log-content {
+  margin-top: 8px;
+  padding: 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  max-height: 300px;
+  overflow-y: auto;
+  font-size: 11px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* Presets */
+.preset-group {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.preset-btn {
+  padding: 6px 16px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.preset-btn:hover { border-color: var(--accent); color: var(--accent); }
+.preset-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* Checkbox toggles */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.toggle-label { font-size: 14px; color: var(--text-primary); }
+.toggle-desc { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+.toggle-switch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  transition: 0.2s;
+}
+
+.toggle-slider:before {
+  content: "";
+  position: absolute;
+  height: 18px;
+  width: 18px;
+  left: 2px;
+  bottom: 2px;
+  background: var(--text-muted);
+  border-radius: 50%;
+  transition: 0.2s;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+  transform: translateX(20px);
+  background: #fff;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .wizard-card { padding: 20px 16px; }
+  .form-row { grid-template-columns: 1fr; }
+  .success-links { grid-template-columns: 1fr; }
+  .step-connector { width: 20px; }
+  .step-dot { width: 30px; height: 30px; font-size: 12px; }
+}
+</style>
+</head>
+<body>
+
+<div class="wizard-outer">
+  <div class="wizard-header">
+    <h1>BrainrotFilter</h1>
+    <p>Setup Wizard (Linux / Debian)</p>
+  </div>
+
+  <div class="step-indicator" id="stepIndicator"></div>
+
+  <div class="wizard-card">
+    <!-- ================================================================ -->
+    <!-- System Health Check (pre-wizard)                                 -->
+    <!-- ================================================================ -->
+    <div id="containerHealthPanel" style="margin-bottom:20px;padding:16px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <div class="spinner" id="healthSpinner" style="width:16px;height:16px;border-width:2px;"></div>
+        <strong style="font-size:14px;">System Status</strong>
+      </div>
+      <div id="healthChecks" style="font-size:13px;"></div>
+    </div>
+
+    <!-- ================================================================ -->
+    <!-- Step 1: Welcome & API Key                                        -->
+    <!-- ================================================================ -->
+    <div class="step-panel active" data-step="1">
+      <h2 class="step-title">Welcome</h2>
+      <p class="step-subtitle">
+        BrainrotFilter is a network-level YouTube content filter. It analyzes
+        videos using keyword matching, scene detection, and audio analysis,
+        then blocks or warns based on configurable thresholds.
+      </p>
+      <p class="step-subtitle">
+        This wizard will configure your Linux system automatically, setting up
+        Squid proxy, SSL interception, and iptables rules. You will need a
+        YouTube Data API v3 key.
+      </p>
+
+      <div class="form-group">
+        <label for="apiKey">YouTube Data API v3 Key</label>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="apiKey" placeholder="AIza..." autocomplete="off">
+          <button class="btn btn-secondary btn-sm" onclick="testApiKey()" id="btnTestKey">Test</button>
+        </div>
+        <div class="form-hint">
+          Free tier: 10,000 units/day. Get a key from the
+          <a href="https://console.cloud.google.com/apis/credentials" target="_blank"
+             style="color:var(--accent)">Google Cloud Console</a>.
+        </div>
+      </div>
+      <div class="connection-result" id="apiKeyResult"></div>
+    </div>
+
+    <!-- ================================================================ -->
+    <!-- Step 2: Network Interface                                        -->
+    <!-- ================================================================ -->
+    <div class="step-panel" data-step="2">
+      <h2 class="step-title">Network Configuration</h2>
+      <p class="step-subtitle">
+        Select the network interface to use for transparent proxy interception.
+        This is typically the LAN-facing interface on your gateway/router.
+      </p>
+
+      <div class="form-group">
+        <label for="networkInterface">Network Interface</label>
+        <select id="networkInterface">
+          <option value="">Loading interfaces...</option>
+        </select>
+        <div class="form-hint">
+          Select the interface connected to your LAN. Traffic on this interface
+          will be transparently proxied through Squid.
+        </div>
+      </div>
+
+      <button class="btn btn-secondary" onclick="loadInterfaces()" id="btnRefreshIfaces">
+        Refresh Interfaces
+      </button>
+      <div class="connection-result" id="ifaceResult"></div>
+    </div>
+
+    <!-- ================================================================ -->
+    <!-- Step 3: Detection Settings                                       -->
+    <!-- ================================================================ -->
+    <div class="step-panel" data-step="3">
+      <h2 class="step-title">Detection Settings</h2>
+      <p class="step-subtitle">
+        Configure analysis thresholds and keyword management.
+      </p>
+
+      <div class="preset-group">
+        <button class="preset-btn" onclick="applyPreset('conservative')">Conservative</button>
+        <button class="preset-btn active" onclick="applyPreset('balanced')">Balanced</button>
+        <button class="preset-btn" onclick="applyPreset('aggressive')">Aggressive</button>
+      </div>
+
+      <div class="slider-group">
+        <div class="slider-header">
+          <span class="slider-label">Keyword Weight</span>
+          <span class="slider-value" id="kwWeightVal">0.40</span>
+        </div>
+        <input type="range" id="kwWeight" min="0" max="100" value="40"
+               oninput="updateSlider('kwWeight')">
+      </div>
+
+      <div class="slider-group">
+        <div class="slider-header">
+          <span class="slider-label">Scene Weight</span>
+          <span class="slider-value" id="sceneWeightVal">0.35</span>
+        </div>
+        <input type="range" id="sceneWeight" min="0" max="100" value="35"
+               oninput="updateSlider('sceneWeight')">
+      </div>
+
+      <div class="slider-group">
+        <div class="slider-header">
+          <span class="slider-label">Audio Weight</span>
+          <span class="slider-value" id="audioWeightVal">0.25</span>
+        </div>
+        <input type="range" id="audioWeight" min="0" max="100" value="25"
+               oninput="updateSlider('audioWeight')">
+      </div>
+
+      <hr style="border-color:var(--border);margin:20px 0">
+
+      <div class="form-row">
+        <div class="slider-group">
+          <div class="slider-header">
+            <span class="slider-label">Monitor Threshold</span>
+            <span class="slider-value" id="monitorVal">20</span>
+          </div>
+          <input type="range" id="monitorMin" min="0" max="100" value="20"
+                 oninput="updateSlider('monitorMin')">
+        </div>
+        <div class="slider-group">
+          <div class="slider-header">
+            <span class="slider-label">Soft Block Threshold</span>
+            <span class="slider-value" id="softVal">35</span>
+          </div>
+          <input type="range" id="softMin" min="0" max="100" value="35"
+                 oninput="updateSlider('softMin')">
+        </div>
+      </div>
+
+      <div class="slider-group">
+        <div class="slider-header">
+          <span class="slider-label">Block Threshold</span>
+          <span class="slider-value" id="blockVal">55</span>
+        </div>
+        <input type="range" id="blockMin" min="0" max="100" value="55"
+               oninput="updateSlider('blockMin')">
+      </div>
+
+      <hr style="border-color:var(--border);margin:20px 0">
+      <h3 style="font-size:16px;margin-bottom:12px">Keywords</h3>
+
+      <div class="keyword-controls">
+        <input type="text" id="kwSearch" placeholder="Search keywords..."
+               oninput="filterKeywords()">
+        <button class="btn btn-secondary btn-sm" onclick="resetKeywords()">Reset to Defaults</button>
+      </div>
+
+      <div class="keyword-table-wrap">
+        <table class="keyword-table">
+          <thead><tr><th>Keyword</th><th>Weight</th><th>Category</th><th></th></tr></thead>
+          <tbody id="kwTableBody"></tbody>
+        </table>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <input type="text" id="newKwWord" placeholder="New keyword" style="flex:2">
+        <input type="number" id="newKwWeight" placeholder="5" min="1" max="10"
+               value="5" style="flex:0 0 60px">
+        <button class="btn btn-secondary btn-sm" onclick="addKeyword()">Add</button>
+      </div>
+    </div>
+
+    <!-- ================================================================ -->
+    <!-- Step 4: Network & Security Configuration                         -->
+    <!-- ================================================================ -->
+    <div class="step-panel" data-step="4">
+      <h2 class="step-title">Network & Security</h2>
+      <p class="step-subtitle">
+        Review what will be configured on your system. The wizard will
+        auto-detect existing configuration and only change what is needed.
+      </p>
+
+      <div id="systemPreview">
+        <p style="color:var(--text-muted);font-size:14px">
+          Detecting system state...
+        </p>
+      </div>
+
+      <div style="margin-top:20px">
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">Configure Squid proxy</div>
+            <div class="toggle-desc">Required for SSL interception</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="optConfigSquid" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">Create CA certificate</div>
+            <div class="toggle-desc">Auto-generate BrainrotFilter CA for SSL bump (openssl)</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="optCreateCA" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">Configure SSL interception</div>
+            <div class="toggle-desc">Peek-stare-bump for YouTube, splice for everything else</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="optSSLBump" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">Block QUIC/HTTP3</div>
+            <div class="toggle-desc">Block UDP 443/80 via iptables to force TCP (required for Squid)</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="optBlockQUIC" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-top:20px">
+        <label for="caName">CA Certificate Name</label>
+        <input type="text" id="caName" value="BrainrotFilter CA">
+      </div>
+
+      <hr style="border-color:var(--border);margin:24px 0 16px">
+      <h3 style="font-size:16px;margin-bottom:8px">SSL Pinning / Mobile App Bypass</h3>
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;line-height:1.5">
+        YouTube's iOS and Android apps use SSL certificate pinning, which bypasses
+        Squid's SSL inspection. The following strategies can help:
+      </p>
+
+      <div id="sslPinningOptions">
+        <div class="ssl-pinning-option">
+          <div class="ssl-pinning-header">
+            <label class="toggle-switch">
+              <input type="radio" id="ssl_pin_none" name="ssl_pinning_method" value="" checked>
+              <span class="toggle-slider"></span>
+            </label>
+            <div class="ssl-pinning-title">
+              <strong>None / Skip</strong>
+              <span class="badge badge-easy">Default</span>
+            </div>
+          </div>
+          <div class="ssl-pinning-desc">
+            Skip SSL pinning bypass. SSL interception will work for browsers but YouTube mobile apps may bypass filtering.
+          </div>
+        </div>
+
+        <div class="ssl-pinning-option">
+          <div class="ssl-pinning-header">
+            <label class="toggle-switch">
+              <input type="radio" id="ssl_pin_dns" name="ssl_pinning_method" value="dns_block">
+              <span class="toggle-slider"></span>
+            </label>
+            <div class="ssl-pinning-title">
+              <strong>Option 1: Block YouTube App Update Domains (DNS)</strong>
+              <span class="badge badge-easy">Easiest</span>
+            </div>
+          </div>
+          <div class="ssl-pinning-desc">
+            Blocks domains used by the YouTube app for certificate validation via /etc/hosts entries.
+          </div>
+        </div>
+
+        <div class="ssl-pinning-option">
+          <div class="ssl-pinning-header">
+            <label class="toggle-switch">
+              <input type="radio" id="ssl_pin_block" name="ssl_pinning_method" value="block_app">
+              <span class="toggle-slider"></span>
+            </label>
+            <div class="ssl-pinning-title">
+              <strong>Option 2: Block YouTube App, Use Browser Instead</strong>
+              <span class="badge badge-strict">Strict</span>
+            </div>
+          </div>
+          <div class="ssl-pinning-desc">
+            Adds iptables rules to block the YouTube app's API endpoints. Users must use a browser where SSL bump works.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================================================================ -->
+    <!-- Step 5: Review & Apply                                           -->
+    <!-- ================================================================ -->
+    <div class="step-panel" data-step="5">
+      <h2 class="step-title">Review & Apply</h2>
+      <p class="step-subtitle">
+        Review your configuration, then click Apply to set up everything.
+      </p>
+
+      <div id="reviewSummary" style="margin-bottom:20px"></div>
+
+      <div id="applySection">
+        <button class="btn btn-primary" onclick="applyConfiguration()" id="btnApply"
+                style="width:100%;justify-content:center;padding:14px;font-size:16px">
+          Apply Configuration
+        </button>
+      </div>
+
+      <div class="progress-steps" id="progressSteps" style="display:none;margin-top:24px"></div>
+      <button class="copy-log-btn" id="copyLogBtn" style="display:none" onclick="copyFullLog()">
+        Copy full log
+      </button>
+
+      <div class="progress-banner" id="progressBannerSuccess">
+        Setup complete! Review the log above, then click Continue.
+        <div class="banner-actions">
+          <button class="btn btn-primary" onclick="window.location.href = window.location.origin + '/'">Go to Admin Panel</button>
+          <button class="copy-log-btn" onclick="copyFullLog()" style="display:inline-flex">Copy full log</button>
+        </div>
+      </div>
+
+      <div class="progress-banner" id="progressBannerError">
+        <span id="progressErrorMsg">Setup encountered errors. Review the log above.</span>
+        <div class="banner-actions">
+          <button class="btn btn-primary" onclick="retryApply()">Retry</button>
+          <button class="copy-log-btn" onclick="copyFullLog()" style="display:inline-flex">Copy full log</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================================================================ -->
+    <!-- Step 6: Success                                                  -->
+    <!-- ================================================================ -->
+    <div class="step-panel" data-step="6">
+      <div class="success-hero">
+        <div class="success-icon">&#10003;</div>
+        <h2>Setup Complete!</h2>
+        <p style="color:var(--text-secondary)">
+          BrainrotFilter is now protecting your network.
+        </p>
+
+        <div class="success-links">
+          <a class="success-link" id="linkAdmin" href="/">
+            <div class="link-label">Admin Panel</div>
+            <div class="link-url" id="adminUrl">http://localhost:8199/</div>
+          </a>
+        </div>
+
+        <!-- CA Certificate Download & Device Install Instructions -->
+        <div style="margin:28px 0;text-align:left;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius);padding:24px;">
+          <h3 style="font-size:17px;margin-bottom:12px;color:var(--accent);text-align:center;">Install CA Certificate on Your Devices</h3>
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;text-align:center;">
+            For SSL interception to work, each device on your network needs to trust the BrainrotFilter CA certificate.
+          </p>
+          <div style="text-align:center;margin-bottom:20px;">
+            <a href="/api/wizard/ca-export" download="BrainrotFilter-CA.crt" id="caDownloadLink"
+               class="btn btn-primary" style="display:inline-flex;gap:8px;text-decoration:none;">
+              &#11015; Download CA Certificate
+            </a>
+            <div id="caDownloadFallback" style="display:none;margin-top:10px;padding:12px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:8px;font-size:13px;color:var(--warning);">
+              CA certificate not available for download. Check /etc/brainrotfilter/ssl/ for the CA files.
+            </div>
+          </div>
+
+          <details style="margin-bottom:8px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;">
+            <summary style="cursor:pointer;font-weight:600;font-size:14px;color:var(--text-primary);">iPhone / iPad (iOS)</summary>
+            <ol style="margin-top:10px;padding-left:20px;font-size:13px;color:var(--text-secondary);line-height:1.7;">
+              <li>AirDrop or email the <code>.crt</code> file to the device, or open the download link in Safari.</li>
+              <li>Tap <strong>Allow</strong> when prompted to download the profile.</li>
+              <li>Go to <strong>Settings &rarr; General &rarr; VPN &amp; Device Management</strong>.</li>
+              <li>Tap the <strong>BrainrotFilter CA</strong> profile and tap <strong>Install</strong>.</li>
+              <li>Go to <strong>Settings &rarr; General &rarr; About &rarr; Certificate Trust Settings</strong>.</li>
+              <li>Enable <strong>Full Trust</strong> for the BrainrotFilter CA certificate.</li>
+            </ol>
+          </details>
+
+          <details style="margin-bottom:8px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;">
+            <summary style="cursor:pointer;font-weight:600;font-size:14px;color:var(--text-primary);">Android</summary>
+            <ol style="margin-top:10px;padding-left:20px;font-size:13px;color:var(--text-secondary);line-height:1.7;">
+              <li>Transfer the <code>.crt</code> file to the device (email, USB, or download via browser).</li>
+              <li>Go to <strong>Settings &rarr; Security &rarr; Encryption &amp; Credentials</strong>.</li>
+              <li>Tap <strong>Install a Certificate &rarr; CA Certificate</strong>.</li>
+              <li>Select the downloaded <code>BrainrotFilter-CA.crt</code> file.</li>
+              <li>Confirm the installation when prompted.</li>
+            </ol>
+          </details>
+
+          <details style="margin-bottom:8px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;">
+            <summary style="cursor:pointer;font-weight:600;font-size:14px;color:var(--text-primary);">Windows</summary>
+            <ol style="margin-top:10px;padding-left:20px;font-size:13px;color:var(--text-secondary);line-height:1.7;">
+              <li>Download the <code>.crt</code> file and double-click it.</li>
+              <li>Click <strong>Install Certificate</strong>.</li>
+              <li>Select <strong>Local Machine</strong> and click Next.</li>
+              <li>Choose <strong>Place all certificates in the following store</strong>.</li>
+              <li>Click Browse and select <strong>Trusted Root Certification Authorities</strong>.</li>
+              <li>Click Next, then Finish. Confirm the security warning.</li>
+            </ol>
+          </details>
+
+          <details style="margin-bottom:8px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;">
+            <summary style="cursor:pointer;font-weight:600;font-size:14px;color:var(--text-primary);">macOS</summary>
+            <ol style="margin-top:10px;padding-left:20px;font-size:13px;color:var(--text-secondary);line-height:1.7;">
+              <li>Download the <code>.crt</code> file and double-click it.</li>
+              <li>Keychain Access will open. Add to the <strong>System</strong> keychain.</li>
+              <li>Find the certificate in Keychain Access, double-click it.</li>
+              <li>Expand <strong>Trust</strong> and set to <strong>Always Trust</strong>.</li>
+              <li>Close the window and enter your password to confirm.</li>
+            </ol>
+          </details>
+
+          <details style="margin-bottom:8px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;">
+            <summary style="cursor:pointer;font-weight:600;font-size:14px;color:var(--text-primary);">Linux</summary>
+            <ol style="margin-top:10px;padding-left:20px;font-size:13px;color:var(--text-secondary);line-height:1.7;">
+              <li>Copy the CA certificate: <code>sudo cp BrainrotFilter-CA.crt /usr/local/share/ca-certificates/</code></li>
+              <li>Update the CA store: <code>sudo update-ca-certificates</code></li>
+              <li>For Firefox: go to Preferences &rarr; Privacy &amp; Security &rarr; Certificates &rarr; Import.</li>
+            </ol>
+          </details>
+        </div>
+
+        <div class="quick-test">
+          <strong>Quick test:</strong> Open YouTube on a device connected to
+          your network and try watching a video. Videos with brainrot
+          content will be analyzed and blocked based on your thresholds.
+        </div>
+
+        <details class="setup-log-section">
+          <summary>View setup log</summary>
+          <pre class="setup-log-content" id="successLogContent"></pre>
+          <button class="copy-log-btn" onclick="copyFullLog()" style="margin-top:8px">Copy full log</button>
+        </details>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <div class="wizard-nav" id="wizardNav">
+      <button class="btn btn-secondary" onclick="goBack()" id="btnBack" style="visibility:hidden">
+        &#8592; Back
+      </button>
+      <button class="btn btn-primary" onclick="goNext()" id="btnNext">
+        Next &#8594;
+      </button>
+    </div>
+  </div>
+
+  <div class="credit-banner">
+    BrainrotFilter for Linux/Debian
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  var TOTAL_STEPS = 6;
+  var currentStep = 1;
+  var keywords = [];
+  var systemState = null;
+  var apiKeyVerified = false;
+
+  // -- Step indicator --
+
+  function buildStepIndicator() {
+    var el = document.getElementById('stepIndicator');
+    el.innerHTML = '';
+    var labels = ['API Key', 'Network', 'Detection', 'Security', 'Apply', 'Done'];
+    for (var i = 1; i <= TOTAL_STEPS; i++) {
+      var wrap = document.createElement('div');
+      wrap.className = 'step-dot-wrap';
+      var dot = document.createElement('div');
+      dot.className = 'step-dot' + (i === currentStep ? ' active' : '') + (i < currentStep ? ' done' : '');
+      dot.textContent = i < currentStep ? '\u2713' : i;
+      dot.title = labels[i-1] || '';
+      (function(step) {
+        dot.onclick = function() { if (step < currentStep) goToStep(step); };
+      })(i);
+      wrap.appendChild(dot);
+      if (i < TOTAL_STEPS) {
+        var conn = document.createElement('div');
+        conn.className = 'step-connector' + (i < currentStep ? ' filled' : '');
+        wrap.appendChild(conn);
+      }
+      el.appendChild(wrap);
+    }
+  }
+
+  // -- Navigation --
+
+  function goToStep(n) {
+    if (n < 1 || n > TOTAL_STEPS) return;
+    var panels = document.querySelectorAll('.step-panel');
+    for (var j = 0; j < panels.length; j++) panels[j].classList.remove('active');
+    var target = document.querySelector('[data-step="' + n + '"]');
+    if (target) target.classList.add('active');
+    currentStep = n;
+    buildStepIndicator();
+    updateNav();
+    onEnterStep(n);
+  }
+
+  window.goNext = function() {
+    if (!validateStep(currentStep)) return;
+    goToStep(currentStep + 1);
+  };
+
+  window.goBack = function() {
+    goToStep(currentStep - 1);
+  };
+
+  function updateNav() {
+    var back = document.getElementById('btnBack');
+    var next = document.getElementById('btnNext');
+    var nav = document.getElementById('wizardNav');
+    back.style.visibility = currentStep <= 1 ? 'hidden' : 'visible';
+    if (currentStep >= 5) {
+      nav.style.display = 'none';
+    } else {
+      nav.style.display = 'flex';
+      next.style.display = '';
+    }
+  }
+
+  // -- Validation --
+
+  function validateStep(step) {
+    if (step === 1) {
+      var key = document.getElementById('apiKey').value.trim();
+      if (!key || key.length < 10) {
+        showResult('apiKeyResult', 'Please enter a valid YouTube API key.', 'error');
+        return false;
+      }
+      return true;
+    }
+    if (step === 2) {
+      var iface = document.getElementById('networkInterface').value;
+      if (!iface) {
+        showResult('ifaceResult', 'Please select a network interface.', 'error');
+        return false;
+      }
+      return true;
+    }
+    return true;
+  }
+
+  function showResult(id, msg, type) {
+    var el = document.getElementById(id);
+    el.className = 'connection-result show ' + type;
+    el.textContent = msg;
+  }
+
+  // -- Step enter hooks --
+
+  function onEnterStep(step) {
+    if (step === 2) loadInterfaces();
+    if (step === 3) loadKeywords();
+    if (step === 4) detectSystemState();
+    if (step === 5) buildReviewSummary();
+    if (step === 6) buildSuccessLinks();
+  }
+
+  // -- API Key test --
+
+  window.testApiKey = function() {
+    var key = document.getElementById('apiKey').value.trim();
+    if (!key) {
+      showResult('apiKeyResult', 'Please enter an API key first.', 'error');
+      return;
+    }
+    var btn = document.getElementById('btnTestKey');
+    btn.disabled = true;
+    btn.textContent = 'Testing...';
+    fetch('/api/wizard/test-key', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({api_key: key}),
+    })
+    .then(function(resp) { return resp.json(); })
+    .then(function(data) {
+      if (data.valid) {
+        showResult('apiKeyResult', data.message + (data.quota_info ? ' (' + data.quota_info + ')' : ''), 'success');
+        apiKeyVerified = true;
+      } else {
+        showResult('apiKeyResult', data.message, 'error');
+        apiKeyVerified = false;
+      }
+    })
+    .catch(function(e) {
+      showResult('apiKeyResult', 'Connection error: ' + e.message, 'error');
+    })
+    .finally(function() {
+      btn.disabled = false;
+      btn.textContent = 'Test';
+    });
+  };
+
+  // -- Network interfaces --
+
+  window.loadInterfaces = function() {
+    fetch('/api/wizard/interfaces')
+    .then(function(resp) { return resp.json(); })
+    .then(function(data) {
+      var sel = document.getElementById('networkInterface');
+      sel.innerHTML = '';
+      var ifaces = data.interfaces || [];
+      if (ifaces.length === 0) {
+        sel.innerHTML = '<option value="">No interfaces detected</option>';
+        return;
+      }
+      for (var i = 0; i < ifaces.length; i++) {
+        var opt = document.createElement('option');
+        opt.value = ifaces[i].name;
+        opt.textContent = ifaces[i].name + (ifaces[i].addr ? ' (' + ifaces[i].addr + ')' : '');
+        sel.appendChild(opt);
+      }
+      showResult('ifaceResult', 'Found ' + ifaces.length + ' interface(s)', 'success');
+    })
+    .catch(function(e) {
+      showResult('ifaceResult', 'Error loading interfaces: ' + e.message, 'error');
+    });
+  };
+
+  // -- System state detection --
+
+  function detectSystemState() {
+    var preview = document.getElementById('systemPreview');
+    preview.innerHTML = '<p style="color:var(--text-muted)">Detecting system configuration...</p>';
+
+    fetch('/api/wizard/detect')
+    .then(function(resp) { return resp.json(); })
+    .then(function(data) {
+      if (!data.success) {
+        preview.innerHTML = '<p style="color:var(--error)">Detection failed: ' + (data.error || '') + '</p>';
+        return;
+      }
+
+      systemState = data;
+      var caName = document.getElementById('caName').value;
+
+      var html = '<ul class="checklist">';
+      html += makeCheckItem(data.squid_installed, 'Squid proxy', 'Installed', 'Will configure');
+      html += makeCheckItem(data.ca_exists, 'CA certificate', 'Found', 'Will create: ' + caName);
+      html += makeCheckItem(data.ip_forwarding, 'IP forwarding', 'Enabled', 'Will enable');
+      html += makeCheckItem(data.iptables_configured, 'iptables rules', 'Already configured', 'Will add rules');
+      html += makeCheckItem(data.helpers_installed, 'Shell helper scripts', 'Already installed', 'Will install');
+      html += '</ul>';
+      preview.innerHTML = html;
+
+      if (data.ca_exists) document.getElementById('optCreateCA').checked = false;
+    })
+    .catch(function(e) {
+      preview.innerHTML = '<p style="color:var(--error)">Detection error: ' + e.message + '</p>';
+    });
+  }
+
+  function makeCheckItem(exists, label, existsMsg, willMsg) {
+    if (exists) {
+      return '<li><span class="check-icon done">\u2713</span><div><strong>' + label + '</strong><br><span style="color:var(--success);font-size:12px">' + existsMsg + '</span></div></li>';
+    }
+    return '<li><span class="check-icon will">\u2699</span><div><strong>' + label + '</strong><br><span style="color:var(--accent);font-size:12px">' + willMsg + '</span></div></li>';
+  }
+
+  // -- Keywords --
+
+  function loadKeywords() {
+    if (keywords.length > 0) { renderKeywords(); return; }
+    fetch('/api/wizard/keywords')
+    .then(function(resp) { return resp.json(); })
+    .then(function(data) {
+      keywords = data.keywords || [];
+      renderKeywords();
+    })
+    .catch(function() {
+      keywords = [];
+      renderKeywords();
+    });
+  }
+
+  function renderKeywords() {
+    var tbody = document.getElementById('kwTableBody');
+    var search = (document.getElementById('kwSearch').value || '').toLowerCase();
+    var html = '';
+    for (var i = 0; i < keywords.length; i++) {
+      var kw = keywords[i];
+      if (search && kw.keyword.toLowerCase().indexOf(search) === -1) continue;
+      html += '<tr>' +
+        '<td>' + escapeHtml(kw.keyword) + '</td>' +
+        '<td><input type="number" class="kw-weight" value="' + kw.weight + '" min="1" max="10" onchange="updateKwWeight(' + i + ',this.value)"></td>' +
+        '<td style="color:var(--text-muted)">' + escapeHtml(kw.category) + '</td>' +
+        '<td><button class="kw-delete" onclick="deleteKeyword(' + i + ')">\u00d7</button></td>' +
+        '</tr>';
+    }
+    tbody.innerHTML = html || '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:20px">No keywords</td></tr>';
+  }
+
+  window.filterKeywords = renderKeywords;
+
+  window.updateKwWeight = function(idx, val) {
+    if (keywords[idx]) keywords[idx].weight = parseInt(val) || 5;
+  };
+
+  window.deleteKeyword = function(idx) {
+    keywords.splice(idx, 1);
+    renderKeywords();
+  };
+
+  window.addKeyword = function() {
+    var word = document.getElementById('newKwWord').value.trim();
+    var weight = parseInt(document.getElementById('newKwWeight').value) || 5;
+    if (!word) return;
+    keywords.push({keyword: word, weight: weight, category: 'custom'});
+    document.getElementById('newKwWord').value = '';
+    renderKeywords();
+  };
+
+  window.resetKeywords = function() {
+    keywords = [];
+    loadKeywords();
+  };
+
+  // -- Sliders --
+
+  window.updateSlider = function(id) {
+    var el = document.getElementById(id);
+    var val = parseInt(el.value);
+    var displays = {
+      kwWeight: ['kwWeightVal', (val/100).toFixed(2)],
+      sceneWeight: ['sceneWeightVal', (val/100).toFixed(2)],
+      audioWeight: ['audioWeightVal', (val/100).toFixed(2)],
+      monitorMin: ['monitorVal', val],
+      softMin: ['softVal', val],
+      blockMin: ['blockVal', val],
+    };
+    if (displays[id]) {
+      document.getElementById(displays[id][0]).textContent = displays[id][1];
+    }
+  };
+
+  window.applyPreset = function(name) {
+    var btns = document.querySelectorAll('.preset-btn');
+    for (var j = 0; j < btns.length; j++) btns[j].classList.remove('active');
+    if (event && event.target) event.target.classList.add('active');
+    var presets = {
+      conservative: {kw:30, scene:30, audio:40, mon:30, soft:45, block:65},
+      balanced:     {kw:40, scene:35, audio:25, mon:20, soft:35, block:55},
+      aggressive:   {kw:45, scene:35, audio:20, mon:15, soft:25, block:40},
+    };
+    var p = presets[name] || presets.balanced;
+    setSlider('kwWeight', p.kw); setSlider('sceneWeight', p.scene);
+    setSlider('audioWeight', p.audio); setSlider('monitorMin', p.mon);
+    setSlider('softMin', p.soft); setSlider('blockMin', p.block);
+  };
+
+  function setSlider(id, val) {
+    document.getElementById(id).value = val;
+    window.updateSlider(id);
+  }
+
+  // -- Review summary --
+
+  function buildReviewSummary() {
+    var iface = document.getElementById('networkInterface').value || 'auto';
+    var kwW = (parseInt(document.getElementById('kwWeight').value)/100).toFixed(2);
+    var scW = (parseInt(document.getElementById('sceneWeight').value)/100).toFixed(2);
+    var auW = (parseInt(document.getElementById('audioWeight').value)/100).toFixed(2);
+    var mon = document.getElementById('monitorMin').value;
+    var soft = document.getElementById('softMin').value;
+    var blk = document.getElementById('blockMin').value;
+
+    var html = '<ul class="checklist">';
+    html += '<li><span class="check-icon will">\u2699</span><div><strong>System Configuration</strong><br><span style="color:var(--text-muted);font-size:12px">API key, thresholds (' + kwW + '/' + scW + '/' + auW + '), ' + keywords.length + ' keywords</span></div></li>';
+    html += '<li><span class="check-icon will">\u2699</span><div><strong>Network Interface</strong><br><span style="color:var(--text-muted);font-size:12px">' + escapeHtml(iface) + '</span></div></li>';
+    if (document.getElementById('optCreateCA').checked)
+      html += '<li><span class="check-icon will">\u2699</span><div><strong>Create CA</strong><br><span style="color:var(--text-muted);font-size:12px">' + escapeHtml(document.getElementById('caName').value) + '</span></div></li>';
+    if (document.getElementById('optConfigSquid').checked)
+      html += '<li><span class="check-icon will">\u2699</span><div><strong>Configure Squid Proxy</strong></div></li>';
+    if (document.getElementById('optSSLBump').checked)
+      html += '<li><span class="check-icon will">\u2699</span><div><strong>Configure SSL Interception</strong></div></li>';
+    if (document.getElementById('optBlockQUIC').checked)
+      html += '<li><span class="check-icon will">\u2699</span><div><strong>Setup iptables Rules</strong><br><span style="color:var(--text-muted);font-size:12px">Redirect + Block UDP 443/80</span></div></li>';
+    var sslMethods = getSelectedSslPinningMethods();
+    if (sslMethods.length > 0)
+      html += '<li><span class="check-icon will">\u2699</span><div><strong>SSL Pinning Bypass</strong><br><span style="color:var(--text-muted);font-size:12px">' + escapeHtml(sslMethods.join(', ')) + '</span></div></li>';
+    html += '<li><span class="check-icon will">\u2699</span><div><strong>Restart Squid</strong></div></li>';
+    html += '<li><span class="check-icon will">\u2699</span><div><strong>Verify Setup</strong></div></li>';
+    html += '</ul>';
+    html += '<p style="font-size:13px;color:var(--text-muted);margin-top:12px">Tier thresholds: Monitor \u2265' + mon + ', Soft Block \u2265' + soft + ', Block \u2265' + blk + '</p>';
+
+    document.getElementById('reviewSummary').innerHTML = html;
+  }
+
+  // -- Apply configuration (SSE) --
+
+  window.applyConfiguration = function() {
+    var btn = document.getElementById('btnApply');
+    btn.disabled = true;
+    btn.textContent = 'Applying...';
+
+    var progressEl = document.getElementById('progressSteps');
+    progressEl.style.display = 'block';
+    progressEl.innerHTML = '';
+    window._wizardLog = [];
+    allLogEntries = [];
+    document.getElementById('copyLogBtn').style.display = 'inline-flex';
+    document.getElementById('progressBannerSuccess').className = 'progress-banner';
+    document.getElementById('progressBannerError').className = 'progress-banner';
+
+    var steps = [
+      {id: 'save_config', label: 'Saving configuration...'},
+      {id: 'ca_create', label: 'Creating CA certificate...'},
+      {id: 'squid_config', label: 'Configuring Squid proxy...'},
+      {id: 'install_helpers', label: 'Installing helper scripts...'},
+      {id: 'iptables', label: 'Setting up iptables rules...'},
+      {id: 'ssl_pinning', label: 'Configuring SSL pinning bypass...'},
+      {id: 'squid_restart', label: 'Restarting Squid service...'},
+      {id: 'verify', label: 'Verifying configuration...'},
+    ];
+
+    for (var s = 0; s < steps.length; s++) {
+      var div = document.createElement('div');
+      div.className = 'progress-step';
+      div.id = 'pstep_' + steps[s].id;
+      div.innerHTML = '<div class="progress-step-icon"><span style="color:var(--text-muted)">\u2022</span></div>' +
+        '<div style="flex:1"><span>' + steps[s].label + '</span>' +
+        '<details class="step-details" id="pdetails_' + steps[s].id + '">' +
+        '<summary>\u25B6 details</summary>' +
+        '<pre class="step-log" id="plog_' + steps[s].id + '"></pre>' +
+        '</details></div>';
+      progressEl.appendChild(div);
+    }
+
+    var payload = {
+      api_key: document.getElementById('apiKey').value.trim(),
+      network_interface: document.getElementById('networkInterface').value,
+      thresholds: {
+        keyword_weight: parseInt(document.getElementById('kwWeight').value) / 100,
+        scene_weight: parseInt(document.getElementById('sceneWeight').value) / 100,
+        audio_weight: parseInt(document.getElementById('audioWeight').value) / 100,
+        monitor_min: parseInt(document.getElementById('monitorMin').value),
+        soft_min: parseInt(document.getElementById('softMin').value),
+        block_min: parseInt(document.getElementById('blockMin').value),
+      },
+      keywords: keywords,
+      create_ca: document.getElementById('optCreateCA').checked,
+      ca_name: document.getElementById('caName').value.trim() || 'BrainrotFilter CA',
+      configure_squid: document.getElementById('optConfigSquid').checked,
+      configure_ssl_bump: document.getElementById('optSSLBump').checked,
+      block_quic: document.getElementById('optBlockQUIC').checked,
+      ssl_pinning_methods: getSelectedSslPinningMethods(),
+    };
+
+    var hasErrors = false;
+
+    fetch('/api/wizard/apply', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+    })
+    .then(function(resp) {
+      var reader = resp.body.getReader();
+      var decoder = new TextDecoder();
+      var buffer = '';
+
+      function read() {
+        return reader.read().then(function(result) {
+          if (result.done) return;
+          buffer += decoder.decode(result.value, {stream: true});
+
+          var lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (var li = 0; li < lines.length; li++) {
+            var line = lines[li];
+            if (line.indexOf('data: ') !== 0) continue;
+            try {
+              var evt = JSON.parse(line.slice(6));
+              updateProgressStep(evt);
+              if (evt.done) {
+                document.getElementById('progressBannerSuccess').className = 'progress-banner banner-success show';
+              }
+              if (evt.status === 'error') {
+                hasErrors = true;
+              }
+            } catch(e) { /* ignore parse errors */ }
+          }
+          return read();
+        });
+      }
+      return read();
+    })
+    .catch(function(e) {
+      hasErrors = true;
+      document.getElementById('progressErrorMsg').textContent = 'Connection lost: ' + e.message;
+      document.getElementById('progressBannerError').className = 'progress-banner banner-error show';
+    })
+    .finally(function() {
+      btn.disabled = false;
+      btn.textContent = 'Apply Configuration';
+      if (hasErrors) {
+        document.getElementById('progressBannerError').className = 'progress-banner banner-error show';
+      }
+    });
+  };
+
+  var allLogEntries = [];
+
+  function updateProgressStep(evt) {
+    var stepEl = document.getElementById('pstep_' + evt.step);
+    if (!stepEl) return;
+
+    allLogEntries.push(JSON.stringify(evt));
+    if (!window._wizardLog) window._wizardLog = [];
+    window._wizardLog.push(evt);
+
+    stepEl.className = 'progress-step ' + evt.status;
+    var icon = '';
+    if (evt.status === 'running') icon = '<div class="spinner"></div>';
+    else if (evt.status === 'done') icon = '<span style="color:var(--success)">\u2713</span>';
+    else if (evt.status === 'error') icon = '<span style="color:var(--error)">\u2717</span>';
+    else if (evt.status === 'warning') icon = '<span style="color:var(--warning)">\u26A0</span>';
+    stepEl.querySelector('.progress-step-icon').innerHTML = icon;
+    var label = stepEl.querySelector('span');
+    if (label) label.textContent = evt.message;
+
+    var logEl = document.getElementById('plog_' + evt.step);
+    if (logEl) {
+      logEl.textContent += JSON.stringify(evt, null, 2) + '\n';
+    }
+
+    if (evt.status === 'error') {
+      var details = document.getElementById('pdetails_' + evt.step);
+      if (details) details.setAttribute('open', '');
+    }
+  }
+
+  // -- Copy full log --
+
+  window.copyFullLog = function() {
+    var text = JSON.stringify(window._wizardLog || [], null, 2);
+    function onCopied(triggerEl) {
+      var orig = triggerEl.textContent;
+      triggerEl.textContent = 'Copied!';
+      setTimeout(function() { triggerEl.textContent = orig; }, 2000);
+    }
+    var triggerBtn = event && event.target ? event.target : document.getElementById('copyLogBtn');
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(function() { onCopied(triggerBtn); });
+    } else {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      onCopied(triggerBtn);
+    }
+  };
+
+  // -- Retry apply --
+
+  window.retryApply = function() {
+    document.getElementById('progressBannerError').className = 'progress-banner';
+    document.getElementById('progressBannerSuccess').className = 'progress-banner';
+    window.applyConfiguration();
+  };
+
+  // -- Success links --
+
+  function buildSuccessLinks() {
+    var adminUrl = window.location.origin + '/';
+    document.getElementById('adminUrl').textContent = adminUrl;
+    document.getElementById('linkAdmin').href = window.location.origin + '/';
+
+    fetch('/api/wizard/ca-export', {method: 'HEAD'})
+      .then(function(resp) {
+        if (!resp.ok) {
+          var link = document.getElementById('caDownloadLink');
+          if (link) link.style.display = 'none';
+          var fallback = document.getElementById('caDownloadFallback');
+          if (fallback) fallback.style.display = 'block';
+        }
+      })
+      .catch(function() {
+        var link = document.getElementById('caDownloadLink');
+        if (link) link.style.display = 'none';
+        var fallback = document.getElementById('caDownloadFallback');
+        if (fallback) fallback.style.display = 'block';
+      });
+
+    var logEl = document.getElementById('successLogContent');
+    if (logEl && window._wizardLog) {
+      logEl.textContent = JSON.stringify(window._wizardLog, null, 2);
+    }
+  }
+
+  // -- Helpers --
+
+  function getSelectedSslPinningMethods() {
+    var selected = document.querySelector('input[name="ssl_pinning_method"]:checked');
+    if (!selected || !selected.value) return [];
+    return [selected.value];
+  }
+
+  function escapeHtml(s) {
+    var div = document.createElement('div');
+    div.textContent = s || '';
+    return div.innerHTML;
+  }
+
+  // -- System health check --
+
+  function runHealthCheck() {
+    var checksEl = document.getElementById('healthChecks');
+    var spinnerEl = document.getElementById('healthSpinner');
+    checksEl.innerHTML = '';
+
+    fetch('/api/wizard/container-health')
+    .then(function(resp) {
+      var reader = resp.body.getReader();
+      var decoder = new TextDecoder();
+      var buf = '';
+
+      function read() {
+        return reader.read().then(function(result) {
+          if (result.done) return;
+          buf += decoder.decode(result.value, {stream: true});
+          var lines = buf.split('\n');
+          buf = lines.pop() || '';
+
+          for (var i = 0; i < lines.length; i++) {
+            var line = lines[i];
+            if (line.indexOf('data: ') !== 0) continue;
+            var raw = line.slice(6);
+            if (raw === '[DONE]') {
+              spinnerEl.style.display = 'none';
+              return;
+            }
+            try {
+              var evt = JSON.parse(raw);
+              var icon = '';
+              if (evt.status === 'done') icon = '<span style="color:var(--success)">&#10003;</span>';
+              else if (evt.status === 'warning') icon = '<span style="color:var(--warning)">&#9888;</span>';
+              else if (evt.status === 'error') icon = '<span style="color:var(--error)">&#10007;</span>';
+
+              var row = document.createElement('div');
+              row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 0;';
+              row.innerHTML = '<span style="width:20px;text-align:center;flex-shrink:0;">' + icon + '</span>' +
+                '<span style="color:' + (evt.status === 'error' ? 'var(--error)' : 'var(--text-secondary)') + '">' + escapeHtml(evt.message) + '</span>';
+              checksEl.appendChild(row);
+            } catch(e) { /* ignore */ }
+          }
+          return read();
+        });
+      }
+      return read();
+    })
+    .catch(function(e) {
+      spinnerEl.style.display = 'none';
+      checksEl.innerHTML = '<div style="color:var(--error)">Health check failed: ' + escapeHtml(e.message) + '</div>';
+    });
+  }
+
+  // -- Init --
+
+  buildStepIndicator();
+  updateNav();
+  runHealthCheck();
+
+})();
+</script>
+</body>
+</html>

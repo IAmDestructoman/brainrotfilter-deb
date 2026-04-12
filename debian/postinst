@@ -1,0 +1,68 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+    configure)
+        # Create brainrotfilter system user if it does not exist
+        if ! getent passwd brainrotfilter >/dev/null 2>&1; then
+            adduser --system --group --home /var/lib/brainrotfilter \
+                --no-create-home --shell /usr/sbin/nologin \
+                brainrotfilter || true
+        fi
+
+        # Set up Python virtual environment
+        if [ ! -d /opt/brainrotfilter/venv ]; then
+            echo "Creating Python virtual environment..."
+            python3 -m venv /opt/brainrotfilter/venv
+        fi
+
+        # Install Python dependencies
+        if [ -f /opt/brainrotfilter/requirements.txt ]; then
+            echo "Installing Python dependencies..."
+            /opt/brainrotfilter/venv/bin/pip install --quiet --upgrade pip
+            /opt/brainrotfilter/venv/bin/pip install --quiet \
+                -r /opt/brainrotfilter/requirements.txt
+        fi
+
+        # Set directory ownership
+        chown -R brainrotfilter:brainrotfilter /var/lib/brainrotfilter
+        chown -R brainrotfilter:brainrotfilter /var/log/brainrotfilter
+        chown -R brainrotfilter:brainrotfilter /etc/brainrotfilter
+        chown -R brainrotfilter:brainrotfilter /opt/brainrotfilter
+
+        # Set permissions
+        chmod 750 /var/lib/brainrotfilter
+        chmod 750 /var/log/brainrotfilter
+        chmod 750 /etc/brainrotfilter
+        chmod 755 /usr/local/bin/brainrotfilter/*.sh
+
+        # Enable and start the service
+        systemctl daemon-reload
+        systemctl enable brainrotfilter.service || true
+        systemctl start brainrotfilter.service || true
+
+        echo ""
+        echo "======================================"
+        echo "  BrainrotFilter installed!"
+        echo "======================================"
+        echo ""
+        echo "  Admin panel: http://$(hostname -I | awk '{print $1}'):8199"
+        echo "  Setup wizard will run on first visit."
+        echo ""
+        echo "  Service: systemctl status brainrotfilter"
+        echo "  Logs:    journalctl -u brainrotfilter -f"
+        echo ""
+        ;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+        ;;
+
+    *)
+        echo "postinst called with unknown argument: $1" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

@@ -1,0 +1,382 @@
+{% extends "base.html" %}
+
+{% block title %}Whitelist{% endblock %}
+{% block page_title %}Whitelist{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Whitelist</h1>
+    <div class="subtitle">Videos and channels explicitly allowed through the filter</div>
+  </div>
+  <button class="btn btn-primary" onclick="BF.openModal('add-whitelist-modal')">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    Add to Whitelist
+  </button>
+</div>
+
+<!-- ── Tabs ───────────────────────────────────────────────────── -->
+<div class="card">
+  <div class="card-body" style="padding-bottom:0">
+    <div class="tabs" id="wl-tabs" style="margin-bottom:0">
+      <button class="tab-btn active" data-tab="videos">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><polygon points="10,8 16,12 10,16"/></svg>
+        Videos
+        <span id="badge-videos" style="margin-left:6px;background:rgba(255,255,255,0.08);border-radius:10px;padding:1px 7px;font-size:0.72rem;font-weight:600">0</span>
+      </button>
+      <button class="tab-btn" data-tab="channels">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px" aria-hidden="true"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+        Channels
+        <span id="badge-channels" style="margin-left:6px;background:rgba(255,255,255,0.08);border-radius:10px;padding:1px 7px;font-size:0.72rem;font-weight:600">0</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Videos tab -->
+  <div class="tab-panel active" data-tab="videos">
+    <div style="padding:14px 16px;border-top:1px solid var(--border)">
+      <div class="toolbar">
+        <div class="search-box">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="search-wl-videos" placeholder="Search videos…" aria-label="Search whitelisted videos">
+        </div>
+      </div>
+    </div>
+    <div class="table-wrap" style="border:none">
+      <table id="wl-videos-table" aria-label="Whitelisted videos">
+        <thead>
+          <tr>
+            <th class="sortable" data-key="target_id">Video ID</th>
+            <th class="sortable" data-key="video_title">Title</th>
+            <th class="sortable" data-key="added_by">Added By</th>
+            <th class="sortable" data-key="reason">Reason</th>
+            <th class="sortable" data-key="created_at">Date Added</th>
+            <th style="width:80px">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="wl-videos-tbody">
+          <tr><td colspan="6"><div class="loading-overlay"><div class="spinner lg"></div><span>Loading…</span></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="wl-videos-pagination" class="pagination"></div>
+  </div>
+
+  <!-- Channels tab -->
+  <div class="tab-panel" data-tab="channels">
+    <div style="padding:14px 16px;border-top:1px solid var(--border)">
+      <div class="toolbar">
+        <div class="search-box">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="search-wl-channels" placeholder="Search channels…" aria-label="Search whitelisted channels">
+        </div>
+      </div>
+    </div>
+    <div class="table-wrap" style="border:none">
+      <table id="wl-channels-table" aria-label="Whitelisted channels">
+        <thead>
+          <tr>
+            <th class="sortable" data-key="target_id">Channel ID</th>
+            <th class="sortable" data-key="channel_name">Channel Name</th>
+            <th class="sortable" data-key="added_by">Added By</th>
+            <th class="sortable" data-key="reason">Reason</th>
+            <th class="sortable" data-key="created_at">Date Added</th>
+            <th style="width:80px">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="wl-channels-tbody">
+          <tr><td colspan="6"><div class="loading-overlay"><div class="spinner lg"></div><span>Loading…</span></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="wl-channels-pagination" class="pagination"></div>
+  </div>
+
+</div><!-- /card -->
+
+<!-- ── Add Whitelist Modal ────────────────────────────────────── -->
+<div id="add-whitelist-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="add-wl-title">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <span class="modal-title" id="add-wl-title">Add to Whitelist</span>
+      <button class="modal-close" onclick="BF.closeModal('add-whitelist-modal')" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group" style="margin-bottom:14px">
+        <label class="form-label" for="new-wl-type">Type</label>
+        <select id="new-wl-type" class="form-select">
+          <option value="video">Video</option>
+          <option value="channel">Channel</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label class="form-label" for="new-wl-id">YouTube ID</label>
+        <input type="text" id="new-wl-id" class="form-input" placeholder="Video ID or Channel ID…">
+        <div style="font-size:0.75rem;color:var(--text-dim);margin-top:4px">
+          Video: 11-character ID from YouTube URL (e.g. dQw4w9WgXcQ)<br>
+          Channel: Channel ID starting with UC…
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="new-wl-reason">Reason <span style="font-weight:400;color:var(--text-dim)">(optional)</span></label>
+        <textarea id="new-wl-reason" class="form-input" placeholder="Why is this being whitelisted?…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="BF.closeModal('add-whitelist-modal')">Cancel</button>
+      <button class="btn btn-success" onclick="submitAddWhitelist()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M9 11l3 3L22 4"/></svg>
+        Add to Whitelist
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Confirm Remove Modal ───────────────────────────────────── -->
+<div id="remove-wl-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="remove-wl-title">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header">
+      <span class="modal-title" id="remove-wl-title">Remove from Whitelist</span>
+      <button class="modal-close" onclick="BF.closeModal('remove-wl-modal')" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="remove-wl-id">
+      <p style="color:var(--text-muted);font-size:0.9rem;line-height:1.6">
+        Remove <strong id="remove-wl-name" style="color:var(--text-primary)"></strong> from the whitelist?
+        This item will be subject to normal filtering again.
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="BF.closeModal('remove-wl-modal')">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmRemoveWhitelist()">Remove</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+'use strict';
+
+let wlVideos   = [];
+let wlChannels = [];
+let filteredVideos   = [];
+let filteredChannels = [];
+const PAGE_SIZE = 25;
+let vPage = 1, cPage = 1;
+let vPaginator = null, cPaginator = null;
+
+/* ── Load ──────────────────────────────────────────────────── */
+
+async function loadWhitelist() {
+  try {
+    const data = await BF.fetchJSON('/api/whitelist');
+    const items = data.items || data || [];
+    wlVideos   = items.filter(i => i.type === 'video');
+    wlChannels = items.filter(i => i.type === 'channel');
+    filteredVideos   = [...wlVideos];
+    filteredChannels = [...wlChannels];
+    renderVideos(filteredVideos);
+    renderChannels(filteredChannels);
+    document.getElementById('badge-videos').textContent   = wlVideos.length;
+    document.getElementById('badge-channels').textContent = wlChannels.length;
+  } catch (e) {
+    BF.showToast('Failed to load whitelist: ' + e.message, 'error');
+  }
+}
+
+/* ── Render Videos ───────────────────────────────────────────── */
+
+function renderVideos(videos) {
+  const tbody = document.getElementById('wl-videos-tbody');
+  const start  = (vPage - 1) * PAGE_SIZE;
+  const page   = videos.slice(start, start + PAGE_SIZE);
+
+  if (!videos.length) {
+    tbody.innerHTML = `<tr><td colspan="6">
+      <div class="empty-state" style="padding:40px 20px">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+        <h3>No whitelisted videos</h3>
+        <p>Add videos that should always be allowed through the filter</p>
+      </div></td></tr>`;
+    document.getElementById('wl-videos-pagination').innerHTML = '';
+    return;
+  }
+
+  tbody.innerHTML = page.map(item => `
+    <tr>
+      <td class="text-mono" style="font-size:0.82rem">${BF.escapeHtml(item.target_id)}</td>
+      <td>
+        <a href="https://www.youtube.com/watch?v=${BF.escapeHtml(item.target_id)}" target="_blank" rel="noopener" style="font-size:0.85rem">
+          ${BF.escapeHtml(item.video_title || item.target_id)}
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-left:2px"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+      </td>
+      <td class="muted">${BF.escapeHtml(item.added_by || 'admin')}</td>
+      <td class="muted" style="font-size:0.82rem;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
+          title="${BF.escapeHtml(item.reason || '')}">${BF.escapeHtml(item.reason || '—')}</td>
+      <td class="muted" style="font-size:0.78rem;white-space:nowrap">${BF.relativeTime(item.created_at)}</td>
+      <td>
+        <button class="btn btn-danger btn-sm" onclick="openRemoveModal(${item.id},'${BF.escapeHtml(item.target_id)}')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="3,6 5,6 21,6"/><path d="M19,6v14a2,2,0,0,1-2,2H7a2,2,0,0,1-2-2V6m3,0V4a1,1,0,0,1,1-1h4a1,1,0,0,1,1,1v2"/></svg>
+        </button>
+      </td>
+    </tr>
+  `).join('');
+
+  if (!vPaginator) {
+    vPaginator = new BF.Paginator({
+      container: document.getElementById('wl-videos-pagination'),
+      pageSize: PAGE_SIZE,
+      onPage: (p) => { vPage = p; renderVideos(filteredVideos); },
+    });
+  }
+  vPaginator.setTotal(videos.length);
+
+  bindTableSort('wl-videos-table', filteredVideos, renderVideos);
+}
+
+/* ── Render Channels ─────────────────────────────────────────── */
+
+function renderChannels(channels) {
+  const tbody = document.getElementById('wl-channels-tbody');
+  const start  = (cPage - 1) * PAGE_SIZE;
+  const page   = channels.slice(start, start + PAGE_SIZE);
+
+  if (!channels.length) {
+    tbody.innerHTML = `<tr><td colspan="6">
+      <div class="empty-state" style="padding:40px 20px">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+        <h3>No whitelisted channels</h3>
+        <p>Add channels that should always be allowed through the filter</p>
+      </div></td></tr>`;
+    document.getElementById('wl-channels-pagination').innerHTML = '';
+    return;
+  }
+
+  tbody.innerHTML = page.map(item => `
+    <tr>
+      <td class="text-mono" style="font-size:0.82rem">${BF.escapeHtml(item.target_id)}</td>
+      <td>
+        <a href="https://www.youtube.com/channel/${BF.escapeHtml(item.target_id)}" target="_blank" rel="noopener" style="font-size:0.85rem">
+          ${BF.escapeHtml(item.channel_name || item.target_id)}
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-left:2px"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+      </td>
+      <td class="muted">${BF.escapeHtml(item.added_by || 'admin')}</td>
+      <td class="muted" style="font-size:0.82rem;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
+          title="${BF.escapeHtml(item.reason || '')}">${BF.escapeHtml(item.reason || '—')}</td>
+      <td class="muted" style="font-size:0.78rem;white-space:nowrap">${BF.relativeTime(item.created_at)}</td>
+      <td>
+        <button class="btn btn-danger btn-sm" onclick="openRemoveModal(${item.id},'${BF.escapeHtml(item.target_id)}')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="3,6 5,6 21,6"/><path d="M19,6v14a2,2,0,0,1-2,2H7a2,2,0,0,1-2-2V6m3,0V4a1,1,0,0,1,1-1h4a1,1,0,0,1,1,1v2"/></svg>
+        </button>
+      </td>
+    </tr>
+  `).join('');
+
+  if (!cPaginator) {
+    cPaginator = new BF.Paginator({
+      container: document.getElementById('wl-channels-pagination'),
+      pageSize: PAGE_SIZE,
+      onPage: (p) => { cPage = p; renderChannels(filteredChannels); },
+    });
+  }
+  cPaginator.setTotal(channels.length);
+
+  bindTableSort('wl-channels-table', filteredChannels, renderChannels);
+}
+
+/* ── Column sort helper ──────────────────────────────────────── */
+
+function bindTableSort(tableId, data, renderFn) {
+  document.querySelectorAll(`#${tableId} thead th.sortable`).forEach(th => {
+    th.onclick = () => {
+      const key = th.dataset.key;
+      const dir = th.classList.contains('sorted-asc') ? -1 : 1;
+      document.querySelectorAll(`#${tableId} thead th`).forEach(h => h.classList.remove('sorted-asc','sorted-desc'));
+      th.classList.add(dir === 1 ? 'sorted-asc' : 'sorted-desc');
+      data.sort((a, b) => {
+        const av = a[key] ?? '', bv = b[key] ?? '';
+        return typeof av === 'string' ? av.localeCompare(bv) * dir : (av - bv) * dir;
+      });
+      renderFn(data);
+    };
+  });
+}
+
+/* ── Add Whitelist ───────────────────────────────────────────── */
+
+async function submitAddWhitelist() {
+  const type   = document.getElementById('new-wl-type').value;
+  const id     = document.getElementById('new-wl-id').value.trim();
+  const reason = document.getElementById('new-wl-reason').value.trim();
+
+  if (!id) { BF.showToast('Please enter a YouTube ID', 'warning'); return; }
+
+  try {
+    await BF.postJSON('/api/whitelist', { type, target_id: id, reason, added_by: 'admin' });
+    BF.showToast(`Added to ${type} whitelist`, 'success');
+    BF.closeModal('add-whitelist-modal');
+    document.getElementById('new-wl-id').value = '';
+    document.getElementById('new-wl-reason').value = '';
+    loadWhitelist();
+  } catch (e) {
+    BF.showToast(`Failed to add: ${e.message}`, 'error');
+  }
+}
+
+/* ── Remove Whitelist ────────────────────────────────────────── */
+
+function openRemoveModal(id, name) {
+  document.getElementById('remove-wl-id').value = id;
+  document.getElementById('remove-wl-name').textContent = name;
+  BF.openModal('remove-wl-modal');
+}
+
+async function confirmRemoveWhitelist() {
+  const id = document.getElementById('remove-wl-id').value;
+  const ok = await BF.removeWhitelist(id);
+  if (ok) {
+    BF.closeModal('remove-wl-modal');
+    loadWhitelist();
+  }
+}
+
+/* ── Search filters ──────────────────────────────────────────── */
+
+function filterVideos() {
+  const q = document.getElementById('search-wl-videos').value.toLowerCase();
+  filteredVideos = q
+    ? wlVideos.filter(v => (v.target_id || '').toLowerCase().includes(q) || (v.video_title || '').toLowerCase().includes(q))
+    : [...wlVideos];
+  vPage = 1;
+  renderVideos(filteredVideos);
+}
+
+function filterChannels() {
+  const q = document.getElementById('search-wl-channels').value.toLowerCase();
+  filteredChannels = q
+    ? wlChannels.filter(c => (c.target_id || '').toLowerCase().includes(q) || (c.channel_name || '').toLowerCase().includes(q))
+    : [...wlChannels];
+  cPage = 1;
+  renderChannels(filteredChannels);
+}
+
+/* ── Init ────────────────────────────────────────────────────── */
+
+document.addEventListener('DOMContentLoaded', () => {
+  BF.initTabs(document.getElementById('wl-tabs').closest('.card'));
+
+  let vTimeout, cTimeout;
+  document.getElementById('search-wl-videos').addEventListener('input', () => {
+    clearTimeout(vTimeout); vTimeout = setTimeout(filterVideos, 300);
+  });
+  document.getElementById('search-wl-channels').addEventListener('input', () => {
+    clearTimeout(cTimeout); cTimeout = setTimeout(filterChannels, 300);
+  });
+
+  loadWhitelist();
+});
+</script>
+{% endblock %}

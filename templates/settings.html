@@ -1,0 +1,488 @@
+{% extends "base.html" %}
+
+{% block title %}Settings{% endblock %}
+{% block page_title %}Settings{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Settings</h1>
+    <div class="subtitle">Configure thresholds, weights, and system options</div>
+  </div>
+  <div class="flex flex-gap">
+    <button class="btn btn-secondary" onclick="resetSettings()" id="btn-reset">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 019-9 9.75 9.75 0 016.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 01-9 9 9.75 9.75 0 01-6.74-2.74L3 16"/></svg>
+      Reset to Defaults
+    </button>
+    <button class="btn btn-primary" onclick="saveAllSettings()" id="btn-save">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>
+      Save Settings
+    </button>
+  </div>
+</div>
+
+<form id="settings-form" onsubmit="e => e.preventDefault()">
+
+  <!-- ── YouTube API ────────────────────────────────────────── -->
+  <div class="settings-section">
+    <div class="settings-section-header">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><polygon points="10,8 16,12 10,16"/></svg>
+      YouTube API
+    </div>
+    <div class="settings-section-body">
+      <div class="form-group" style="grid-column:1/-1">
+        <label class="form-label" for="youtube_api_key">API Key</label>
+        <div class="flex flex-gap" style="gap:8px">
+          <input type="text" id="youtube_api_key" name="youtube_api_key" class="form-input" placeholder="AIza…" autocomplete="off" aria-label="YouTube API key">
+          <button type="button" class="btn btn-secondary" onclick="toggleApiKeyVisibility()" title="Toggle visibility">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="testApiKey()" id="btn-test-api">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>
+            Test Connection
+          </button>
+        </div>
+        <div id="api-test-result" style="font-size:0.82rem;margin-top:6px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Analysis Thresholds ───────────────────────────────── -->
+  <div class="settings-section">
+    <div class="settings-section-header">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      Analysis Thresholds
+    </div>
+    <div class="settings-section-body">
+      <div class="form-group">
+        <label class="form-label" for="keyword_threshold">Keyword Threshold</label>
+        <div class="slider-row">
+          <input type="range" id="keyword_threshold" name="keyword_threshold" min="0" max="100" value="40">
+          <span id="keyword_threshold-val" class="slider-value">40</span>
+        </div>
+        <div style="font-size:0.75rem;color:var(--text-dim);margin-top:4px">Score at which keyword analysis flags a video</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="scene_threshold">Scene Threshold</label>
+        <div class="slider-row">
+          <input type="range" id="scene_threshold" name="scene_threshold" min="0" max="100" value="50">
+          <span id="scene_threshold-val" class="slider-value">50</span>
+        </div>
+        <div style="font-size:0.75rem;color:var(--text-dim);margin-top:4px">Cut rate score at which scene analysis flags</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="audio_threshold">Audio Threshold</label>
+        <div class="slider-row">
+          <input type="range" id="audio_threshold" name="audio_threshold" min="0" max="100" value="45">
+          <span id="audio_threshold-val" class="slider-value">45</span>
+        </div>
+        <div style="font-size:0.75rem;color:var(--text-dim);margin-top:4px">Audio chaos score threshold for flagging</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="combined_threshold">Combined Threshold</label>
+        <div class="slider-row">
+          <input type="range" id="combined_threshold" name="combined_threshold" min="0" max="100" value="45">
+          <span id="combined_threshold-val" class="slider-value">45</span>
+        </div>
+        <div style="font-size:0.75rem;color:var(--text-dim);margin-top:4px">Weighted combined score for tier assignment</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Score Weights ──────────────────────────────────────── -->
+  <div class="settings-section">
+    <div class="settings-section-header">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Score Weights
+    </div>
+    <div class="settings-section-body">
+      <div class="form-group">
+        <label class="form-label" for="weight_keyword">Keyword Weight</label>
+        <div class="slider-row">
+          <input type="range" id="weight_keyword" name="weight_keyword" min="0" max="1" step="0.05" value="0.25">
+          <span id="weight_keyword-val" class="slider-value">0.25</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="weight_scene">Scene Weight</label>
+        <div class="slider-row">
+          <input type="range" id="weight_scene" name="weight_scene" min="0" max="1" step="0.05" value="0.20">
+          <span id="weight_scene-val" class="slider-value">0.20</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="weight_audio">Audio Weight</label>
+        <div class="slider-row">
+          <input type="range" id="weight_audio" name="weight_audio" min="0" max="1" step="0.05" value="0.15">
+          <span id="weight_audio-val" class="slider-value">0.15</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="weight_comment">Comment Weight</label>
+        <div class="slider-row">
+          <input type="range" id="weight_comment" name="weight_comment" min="0" max="1" step="0.05" value="0.15">
+          <span id="weight_comment-val" class="slider-value">0.15</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="weight_engagement">Engagement Weight</label>
+        <div class="slider-row">
+          <input type="range" id="weight_engagement" name="weight_engagement" min="0" max="1" step="0.05" value="0.10">
+          <span id="weight_engagement-val" class="slider-value">0.10</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="weight_thumbnail">Thumbnail Weight</label>
+        <div class="slider-row">
+          <input type="range" id="weight_thumbnail" name="weight_thumbnail" min="0" max="1" step="0.05" value="0.10">
+          <span id="weight_thumbnail-val" class="slider-value">0.10</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="weight_ml">ML Weight</label>
+        <div class="slider-row">
+          <input type="range" id="weight_ml" name="weight_ml" min="0" max="1" step="0.05" value="0.05">
+          <span id="weight_ml-val" class="slider-value">0.05</span>
+        </div>
+      </div>
+
+      <div style="grid-column:1/-1">
+        <div class="weight-sum-indicator">
+          <span>Weight Sum:</span>
+          <span id="weight-sum-display" class="weight-sum-value valid">1.00</span>
+          <span style="font-size:0.78rem;color:var(--text-dim)">(must equal 1.00)</span>
+          <div id="weight-sum-bar" style="flex:1;height:4px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden">
+            <div id="weight-sum-fill" style="height:100%;background:var(--success);width:100%;transition:width 0.3s"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Scan Settings ──────────────────────────────────────── -->
+  <div class="settings-section">
+    <div class="settings-section-header">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
+      Scan Settings
+    </div>
+    <div class="settings-section-body">
+      <div class="form-group">
+        <label class="form-label" for="initial_scan_duration">Initial Scan Duration (seconds)</label>
+        <input type="number" id="initial_scan_duration" name="initial_scan_duration" class="form-input" value="45" min="10" max="300" step="5">
+        <div style="font-size:0.75rem;color:var(--text-dim);margin-top:4px">How many seconds of video to analyze initially</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="full_scan_time_limit">Full Scan Time Limit (seconds)</label>
+        <input type="number" id="full_scan_time_limit" name="full_scan_time_limit" class="form-input" value="120" min="30" max="600" step="10">
+        <div style="font-size:0.75rem;color:var(--text-dim);margin-top:4px">Maximum time for full deep scan when initial flags</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Channel Settings ───────────────────────────────────── -->
+  <div class="settings-section">
+    <div class="settings-section-header">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2" aria-hidden="true"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+      Channel Settings
+    </div>
+    <div class="settings-section-body">
+      <div class="form-group">
+        <label class="form-label" for="channel_flag_percentage">Auto-Escalation Threshold (%)</label>
+        <div class="slider-row">
+          <input type="range" id="channel_flag_percentage" name="channel_flag_percentage" min="0" max="100" value="30">
+          <span id="channel_flag_percentage-val" class="slider-value">30</span>
+        </div>
+        <div style="font-size:0.75rem;color:var(--text-dim);margin-top:4px">Percentage of flagged videos to trigger channel auto-escalation</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Auto-Escalation</label>
+        <div class="toggle-wrap" style="margin-top:6px">
+          <label class="toggle">
+            <input type="checkbox" id="auto_escalation" name="auto_escalation" checked>
+            <span class="toggle-track"></span>
+          </label>
+          <span style="font-size:0.88rem;color:var(--text-muted)">Enable automatic channel tier escalation</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tier Score Ranges ───────────────────────────────────── -->
+  <div class="settings-section">
+    <div class="settings-section-header">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2" aria-hidden="true"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      Tier Score Ranges
+    </div>
+    <div class="settings-section-body">
+      <div class="form-group">
+        <label class="form-label" for="monitor_score_min">Monitor Minimum Score</label>
+        <div class="slider-row">
+          <input type="range" id="monitor_score_min" name="monitor_score_min" min="0" max="100" value="20">
+          <span id="monitor_score_min-val" class="slider-value">20</span>
+        </div>
+        <div style="font-size:0.75rem;color:var(--text-dim);margin-top:4px">Scores at or above this → Monitor tier</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="soft_block_score_min">Soft Block Minimum Score</label>
+        <div class="slider-row">
+          <input type="range" id="soft_block_score_min" name="soft_block_score_min" min="0" max="100" value="35">
+          <span id="soft_block_score_min-val" class="slider-value">35</span>
+        </div>
+        <div style="font-size:0.75rem;color:var(--text-dim);margin-top:4px">Scores at or above this → Soft Block tier</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="block_score_min">Block Minimum Score</label>
+        <div class="slider-row">
+          <input type="range" id="block_score_min" name="block_score_min" min="0" max="100" value="55">
+          <span id="block_score_min-val" class="slider-value">55</span>
+        </div>
+        <div style="font-size:0.75rem;color:var(--text-dim);margin-top:4px">Scores at or above this → Block tier (full block)</div>
+      </div>
+
+      <!-- Tier range visual -->
+      <div style="grid-column:1/-1">
+        <div style="font-size:0.78rem;font-weight:600;text-transform:uppercase;letter-spacing:0.7px;color:var(--text-dim);margin-bottom:10px">Tier Ranges Preview</div>
+        <div style="display:flex;height:28px;border-radius:6px;overflow:hidden" id="tier-range-preview">
+          <div id="tier-allow-bar"      style="background:var(--success);display:flex;align-items:center;justify-content:center;font-size:0.68rem;font-weight:600;color:#fff;transition:width 0.3s">Allow</div>
+          <div id="tier-monitor-bar"    style="background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:0.68rem;font-weight:600;color:#000;transition:width 0.3s">Monitor</div>
+          <div id="tier-softblock-bar"  style="background:var(--warning);display:flex;align-items:center;justify-content:center;font-size:0.68rem;font-weight:600;color:#000;transition:width 0.3s">Soft Block</div>
+          <div id="tier-block-bar"      style="background:var(--danger);display:flex;align-items:center;justify-content:center;font-size:0.68rem;font-weight:600;color:#fff;transition:width 0.3s">Block</div>
+        </div>
+        <div id="tier-range-labels" style="display:flex;justify-content:space-between;font-size:0.72rem;color:var(--text-dim);margin-top:4px;font-family:var(--font-mono)">
+          <span>0</span>
+          <span id="label-monitor-min">20</span>
+          <span id="label-softblock-min">35</span>
+          <span id="label-block-min">55</span>
+          <span>100</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</form><!-- /settings-form -->
+
+<!-- ── Save button bar ────────────────────────────────────────── -->
+<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;padding-top:20px;border-top:1px solid var(--border)">
+  <button class="btn btn-secondary" onclick="resetSettings()">Reset to Defaults</button>
+  <button class="btn btn-primary btn-lg" onclick="saveAllSettings()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>
+    Save Settings
+  </button>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+'use strict';
+
+const DEFAULTS = {
+  youtube_api_key:        '',
+  keyword_threshold:      40,
+  scene_threshold:        50,
+  audio_threshold:        45,
+  combined_threshold:     45,
+  weight_keyword:         0.25,
+  weight_scene:           0.20,
+  weight_audio:           0.15,
+  weight_comment:         0.15,
+  weight_engagement:      0.10,
+  weight_thumbnail:       0.10,
+  weight_ml:              0.05,
+  initial_scan_duration:  45,
+  full_scan_time_limit:   120,
+  channel_flag_percentage:30,
+  auto_escalation:        true,
+  monitor_score_min:      20,
+  soft_block_score_min:   35,
+  block_score_min:        55,
+  pfsense_ip:             '',
+};
+
+/* ── Toggle API key visibility ───────────────────────────────── */
+function toggleApiKeyVisibility() {
+  const el = document.getElementById('youtube_api_key');
+  if (el.type === 'password') {
+    el.type = 'text';
+  } else {
+    el.type = 'password';
+  }
+}
+
+/* ── Test API key ────────────────────────────────────────────── */
+async function testApiKey() {
+  const btn = document.getElementById('btn-test-api');
+  const result = document.getElementById('api-test-result');
+  const key = document.getElementById('youtube_api_key').value.trim();
+
+  if (!key) { result.innerHTML = '<span style="color:var(--warning)">⚠ Please enter an API key first</span>'; return; }
+
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner" style="width:14px;height:14px;border-width:2px"></div> Testing…';
+  result.innerHTML = '';
+
+  try {
+    const res = await BF.postJSON('/api/settings/test-youtube-api', { api_key: key });
+    result.innerHTML = `<span style="color:var(--success)">✓ Connection successful — quota: ${res.quota_used || 'unknown'}</span>`;
+  } catch (e) {
+    result.innerHTML = `<span style="color:var(--danger)">✕ Test failed: ${BF.escapeHtml(e.message)}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg> Test Connection`;
+  }
+}
+
+/* ── Tier range preview ──────────────────────────────────────── */
+function updateTierPreview() {
+  const monMin  = parseInt(document.getElementById('monitor_score_min').value)    || 20;
+  const sbMin   = parseInt(document.getElementById('soft_block_score_min').value) || 35;
+  const blkMin  = parseInt(document.getElementById('block_score_min').value)      || 55;
+
+  const allowPct  = monMin;
+  const monPct    = Math.max(0, sbMin - monMin);
+  const sbPct     = Math.max(0, blkMin - sbMin);
+  const blockPct  = Math.max(0, 100 - blkMin);
+
+  document.getElementById('tier-allow-bar').style.width    = allowPct + '%';
+  document.getElementById('tier-monitor-bar').style.width  = monPct  + '%';
+  document.getElementById('tier-softblock-bar').style.width = sbPct  + '%';
+  document.getElementById('tier-block-bar').style.width    = blockPct + '%';
+
+  document.getElementById('label-monitor-min').textContent  = monMin;
+  document.getElementById('label-softblock-min').textContent = sbMin;
+  document.getElementById('label-block-min').textContent    = blkMin;
+}
+
+/* ── Load settings ───────────────────────────────────────────── */
+async function loadSettings() {
+  try {
+    const data = await BF.fetchJSON('/api/settings');
+    populateSettingsForm(data);
+  } catch (e) {
+    BF.showToast('Failed to load settings: ' + e.message, 'error');
+    populateSettingsForm(DEFAULTS);
+  }
+}
+
+function populateSettingsForm(data) {
+  const form = document.getElementById('settings-form');
+  const settings = { ...DEFAULTS, ...data };
+
+  Object.entries(settings).forEach(([key, val]) => {
+    const el = form.elements[key] || document.getElementById(key);
+    if (!el) return;
+    if (el.type === 'checkbox') el.checked = Boolean(val);
+    else el.value = val ?? '';
+  });
+
+  BF.initSliders(form);
+  updateTierPreview();
+}
+
+/* ── Save settings ───────────────────────────────────────────── */
+async function saveAllSettings() {
+  const btn = document.getElementById('btn-save');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner" style="width:14px;height:14px;border-width:2px"></div> Saving…';
+
+  // Validate weights sum (all 7 analyzer weights)
+  const wk = parseFloat(document.getElementById('weight_keyword').value);
+  const ws = parseFloat(document.getElementById('weight_scene').value);
+  const wa = parseFloat(document.getElementById('weight_audio').value);
+  const wc = parseFloat(document.getElementById('weight_comment').value);
+  const we = parseFloat(document.getElementById('weight_engagement').value);
+  const wt = parseFloat(document.getElementById('weight_thumbnail').value);
+  const wm = parseFloat(document.getElementById('weight_ml').value);
+  const sum = Math.round((wk + ws + wa + wc + we + wt + wm) * 100) / 100;
+
+  if (Math.abs(sum - 1.0) > 0.02) {
+    BF.showToast('Score weights must sum to 1.00 (currently ' + sum.toFixed(2) + ')', 'error');
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg> Save Settings`;
+    return;
+  }
+
+  // Validate tier ranges
+  const monMin = parseInt(document.getElementById('monitor_score_min').value);
+  const sbMin  = parseInt(document.getElementById('soft_block_score_min').value);
+  const blkMin = parseInt(document.getElementById('block_score_min').value);
+
+  if (monMin >= sbMin || sbMin >= blkMin) {
+    BF.showToast('Tier thresholds must be in ascending order: Monitor < Soft Block < Block', 'error');
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg> Save Settings`;
+    return;
+  }
+
+  // Collect all form values
+  const payload = {};
+  const form = document.getElementById('settings-form');
+  new FormData(form).forEach((val, key) => {
+    const num = parseFloat(val);
+    payload[key] = isNaN(num) ? val : num;
+  });
+  form.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    payload[cb.name] = cb.checked;
+  });
+
+  try {
+    await BF.putJSON('/api/settings', payload);
+    BF.showToast('Settings saved successfully', 'success');
+  } catch (e) {
+    BF.showToast('Save failed: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg> Save Settings`;
+  }
+}
+
+/* ── Reset to defaults ───────────────────────────────────────── */
+function resetSettings() {
+  BF.confirmAction('Reset all settings to factory defaults?', () => {
+    populateSettingsForm(DEFAULTS);
+    BF.showToast('Settings reset to defaults (not yet saved)', 'warning');
+  }, false);
+}
+
+/* ── Init ────────────────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', () => {
+  // Weight sum validator (all 7 analyzer weights)
+  const allWeightIds = ['weight_keyword','weight_scene','weight_audio','weight_comment','weight_engagement','weight_thumbnail','weight_ml'];
+  BF.initWeightValidator(allWeightIds, 'weight-sum-display');
+
+  // Weight bar fill
+  function updateWeightFill() {
+    let sum = 0;
+    allWeightIds.forEach(id => { sum += parseFloat(document.getElementById(id).value) || 0; });
+    sum = Math.round(sum * 100) / 100;
+    const fill = document.getElementById('weight-sum-fill');
+    if (fill) {
+      fill.style.width = Math.min(sum * 100, 100) + '%';
+      fill.style.background = Math.abs(sum - 1.0) < 0.02 ? 'var(--success)' : 'var(--danger)';
+    }
+  }
+  allWeightIds.forEach(id => {
+    document.getElementById(id).addEventListener('input', updateWeightFill);
+  });
+
+  // Tier preview update
+  ['monitor_score_min','soft_block_score_min','block_score_min'].forEach(id => {
+    document.getElementById(id).addEventListener('input', updateTierPreview);
+  });
+
+  loadSettings();
+});
+</script>
+{% endblock %}

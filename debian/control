@@ -1,0 +1,36 @@
+Source: brainrotfilter
+Section: net
+Priority: optional
+Maintainer: IAmDestructoman <github@destructoman.dev>
+Build-Depends: debhelper-compat (= 13), python3, dh-python
+Standards-Version: 4.6.2
+Homepage: https://github.com/IAmDestructoman/brainrotfilter-deb
+Rules-Requires-Root: no
+
+Package: brainrotfilter
+Architecture: all
+Depends: ${misc:Depends},
+         python3 (>= 3.9),
+         python3-venv,
+         squid (>= 5.0),
+         squid-openssl | squid,
+         openssl,
+         iptables,
+         conntrack,
+         curl,
+         ffmpeg
+Recommends: python3-pip
+Suggests: vosk-model-en-us-small
+Description: Network-level YouTube brainrot video filter for Linux
+ BrainrotFilter is a transparent network proxy that analyzes YouTube
+ videos using keyword matching, scene detection, audio analysis, and
+ engagement metrics. It integrates with Squid proxy to intercept and
+ filter YouTube traffic on your network.
+ .
+ Features include:
+  - Real-time YouTube video analysis
+  - Configurable detection thresholds
+  - Web-based admin dashboard
+  - Squid SSL bump integration
+  - iptables transparent proxy setup
+  - Community keyword sharing

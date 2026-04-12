@@ -1,0 +1,384 @@
+{% extends "base.html" %}
+
+{% block title %}Channels{% endblock %}
+{% block page_title %}Channels{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Channel Profiles</h1>
+    <div class="subtitle">Per-channel analysis and tier management</div>
+  </div>
+  <button class="btn btn-secondary" onclick="exportChannelsCSV()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    Export CSV
+  </button>
+</div>
+
+<!-- ── Filters ────────────────────────────────────────────────── -->
+<div class="card" style="margin-bottom:16px">
+  <div class="card-body" style="padding:14px 16px">
+    <div class="toolbar">
+      <div class="search-box">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="channel-search" placeholder="Search channel name…" aria-label="Search channels">
+      </div>
+
+      <select id="filter-tier" class="form-select" style="width:auto;min-width:140px" aria-label="Filter by tier">
+        <option value="">All Tiers</option>
+        <option value="allow">Allow</option>
+        <option value="monitor">Monitor</option>
+        <option value="soft_block">Soft Block</option>
+        <option value="block">Block</option>
+      </select>
+
+      <label class="toggle-wrap">
+        <span class="toggle">
+          <input type="checkbox" id="filter-auto-escalated">
+          <span class="toggle-track"></span>
+        </span>
+        <span style="font-size:0.85rem;color:var(--text-muted)">Auto-escalated only</span>
+      </label>
+
+      <button class="btn btn-primary" onclick="applyFilters()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polygon points="22,3 2,3 10,12.46 10,19 14,21 14,12.46"/></svg>
+        Filter
+      </button>
+      <button class="btn btn-secondary" onclick="clearFilters()">Clear</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Channels Table ─────────────────────────────────────────── -->
+<div class="card">
+  <div class="table-wrap" style="border:none">
+    <table id="channels-table" aria-label="Channel profiles">
+      <thead>
+        <tr>
+          <th class="sortable" data-key="channel_name">Channel Name</th>
+          <th class="sortable" data-key="videos_analyzed">Analyzed</th>
+          <th class="sortable" data-key="videos_flagged">Flagged</th>
+          <th class="sortable" data-key="flagged_percentage">Flag %</th>
+          <th class="sortable" data-key="avg_video_length">Avg Length</th>
+          <th class="sortable" data-key="upload_frequency">Upload Freq.</th>
+          <th class="sortable" data-key="tier">Tier</th>
+          <th style="width:160px">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="channels-tbody">
+        <tr><td colspan="8"><div class="loading-overlay"><div class="spinner lg"></div><span>Loading channels…</span></div></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div id="channels-pagination" class="pagination"></div>
+</div>
+
+<!-- ── Override Tier Modal ────────────────────────────────────── -->
+<div id="tier-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="tier-modal-title">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header">
+      <span class="modal-title" id="tier-modal-title">Override Channel Tier</span>
+      <button class="modal-close" onclick="BF.closeModal('tier-modal')" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="tier-channel-id">
+      <div class="form-group" style="margin-bottom:14px">
+        <label class="form-label">Channel</label>
+        <div id="tier-channel-name" style="color:var(--text-muted);font-size:0.88rem"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="tier-select">New Tier</label>
+        <select id="tier-select" class="form-select">
+          <option value="allow">Allow</option>
+          <option value="monitor">Monitor</option>
+          <option value="soft_block">Soft Block</option>
+          <option value="block">Block</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="BF.closeModal('tier-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitTierOverride()">Apply</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Channel Whitelist Modal ────────────────────────────────── -->
+<div id="ch-whitelist-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="ch-wl-title">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <span class="modal-title" id="ch-wl-title">Whitelist Channel</span>
+      <button class="modal-close" onclick="BF.closeModal('ch-whitelist-modal')" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ch-wl-id">
+      <div class="form-group" style="margin-bottom:14px">
+        <label class="form-label">Channel</label>
+        <div id="ch-wl-name" style="color:var(--text-muted);font-size:0.88rem"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="ch-wl-reason">Reason</label>
+        <textarea id="ch-wl-reason" class="form-input" placeholder="Reason for whitelisting…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="BF.closeModal('ch-whitelist-modal')">Cancel</button>
+      <button class="btn btn-success" onclick="submitChannelWhitelist()">Add to Whitelist</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+'use strict';
+
+let allChannels     = [];
+let filteredChannels = [];
+const PAGE_SIZE      = 25;
+let currentPage      = 1;
+let paginator        = null;
+
+/* ── Load ──────────────────────────────────────────────────── */
+async function loadChannels() {
+  const tbody = document.getElementById('channels-tbody');
+  BF.showLoading(tbody.parentElement, 'Loading channels…');
+
+  try {
+    const data = await BF.fetchJSON('/api/channels?limit=500');
+    allChannels = data.items || data || [];
+    filteredChannels = [...allChannels];
+    renderTable(filteredChannels);
+  } catch (e) {
+    BF.showError(tbody.parentElement, e.message);
+    BF.showToast('Failed to load channels: ' + e.message, 'error');
+  }
+}
+
+/* ── Render ────────────────────────────────────────────────── */
+function renderTable(channels) {
+  const tbody = document.getElementById('channels-tbody');
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const page  = channels.slice(start, start + PAGE_SIZE);
+
+  if (!channels.length) {
+    tbody.innerHTML = `<tr><td colspan="8">
+      <div class="empty-state">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+        <h3>No channels found</h3><p>Try adjusting your filters</p>
+      </div></td></tr>`;
+    document.getElementById('channels-pagination').innerHTML = '';
+    return;
+  }
+
+  tbody.innerHTML = page.map(ch => `
+    <tr class="expand-row" data-id="${BF.escapeHtml(ch.channel_id)}">
+      <td style="font-weight:500">
+        ${BF.escapeHtml(ch.channel_name || ch.channel_id)}
+        ${ch.auto_escalated ? `<span class="auto-escalated-badge" title="Auto-escalated based on flagged percentage">⬆ Auto</span>` : ''}
+      </td>
+      <td class="text-mono">${BF.fmtNum(ch.videos_analyzed || 0)}</td>
+      <td class="text-mono">${BF.fmtNum(ch.videos_flagged || 0)}</td>
+      <td>
+        <div class="score-bar">
+          <span class="score ${BF.scoreColorClass(ch.flagged_percentage || 0)}">${BF.fmtPct(ch.flagged_percentage)}</span>
+          <div class="score-bar-track">
+            <div class="score-bar-fill ${BF.scoreClass(ch.flagged_percentage||0)}" style="width:${Math.min(ch.flagged_percentage||0,100)}%"></div>
+          </div>
+        </div>
+      </td>
+      <td class="muted">${BF.fmtDuration(ch.avg_video_length)}</td>
+      <td class="muted">${ch.upload_frequency ? ch.upload_frequency + '/wk' : '—'}</td>
+      <td>${BF.statusBadge(ch.tier)}</td>
+      <td onclick="event.stopPropagation()">
+        <div class="flex" style="gap:4px">
+          <button class="btn btn-secondary btn-sm" onclick="openTierModal('${BF.escapeHtml(ch.channel_id)}','${BF.escapeHtml(ch.channel_name||ch.channel_id)}','${ch.tier}')">
+            Override Tier
+          </button>
+          <button class="btn btn-success btn-sm" onclick="openChannelWhitelistModal('${BF.escapeHtml(ch.channel_id)}','${BF.escapeHtml(ch.channel_name||ch.channel_id)}')">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 11l3 3L22 4"/></svg>
+          </button>
+          <a href="/videos?channel=${BF.escapeHtml(ch.channel_id)}" class="btn btn-secondary btn-sm" title="View videos">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><polygon points="10,8 16,12 10,16"/></svg>
+          </a>
+        </div>
+      </td>
+    </tr>
+    <!-- Expanded row -->
+    <tr class="expand-content">
+      <td colspan="8">
+        <div class="expand-inner">
+          <div class="detail-section">
+            <h4>Channel Info</h4>
+            <div class="detail-row"><span class="key">Channel ID</span><span class="val">${BF.escapeHtml(ch.channel_id)}</span></div>
+            <div class="detail-row"><span class="key">Subscribers</span><span class="val">${BF.fmtNum(ch.subscriber_count)}</span></div>
+            <div class="detail-row"><span class="key">Total Videos</span><span class="val">${BF.fmtNum(ch.total_videos)}</span></div>
+            <div class="detail-row"><span class="key">Last Analyzed</span><span class="val">${BF.formatDate(ch.last_analyzed)}</span></div>
+            <div class="detail-row"><span class="key">Added</span><span class="val">${BF.formatDate(ch.created_at)}</span></div>
+          </div>
+          <div class="detail-section">
+            <h4>Flagging Stats</h4>
+            <div class="detail-row"><span class="key">Videos Analyzed</span><span class="val">${ch.videos_analyzed||0}</span></div>
+            <div class="detail-row"><span class="key">Videos Flagged</span><span class="val">${ch.videos_flagged||0}</span></div>
+            <div class="detail-row"><span class="key">Flag Percentage</span><span class="val">${BF.fmtPct(ch.flagged_percentage)}</span></div>
+            <div class="detail-row"><span class="key">Auto-Escalated</span><span class="val">${ch.auto_escalated ? 'Yes' : 'No'}</span></div>
+            <div class="detail-row"><span class="key">Current Tier</span><span class="val">${ch.tier}</span></div>
+          </div>
+          <div style="align-self:flex-start">
+            <a href="/videos?channel=${BF.escapeHtml(ch.channel_id)}" class="btn btn-secondary btn-sm">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><polygon points="10,8 16,12 10,16"/></svg>
+              View Videos
+            </a>
+            <div style="margin-top:6px">
+              <a href="https://www.youtube.com/channel/${BF.escapeHtml(ch.channel_id)}" target="_blank" rel="noopener" class="btn btn-secondary btn-sm">
+                Open on YouTube ↗
+              </a>
+            </div>
+          </div>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+
+  // Bind expand
+  tbody.querySelectorAll('tr.expand-row').forEach(row => {
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('button, a, input')) return;
+      const expandRow = row.nextElementSibling;
+      const isOpen = row.classList.contains('open');
+      tbody.querySelectorAll('tr.expand-row.open').forEach(r => {
+        r.classList.remove('open'); r.nextElementSibling?.classList.remove('open');
+      });
+      if (!isOpen) { row.classList.add('open'); expandRow?.classList.add('open'); }
+    });
+  });
+
+  // Pagination
+  if (!paginator) {
+    paginator = new BF.Paginator({
+      container: document.getElementById('channels-pagination'),
+      pageSize: PAGE_SIZE,
+      onPage: (page) => { currentPage = page; renderTable(filteredChannels); },
+    });
+  }
+  paginator.setTotal(channels.length);
+
+  // Column sorting
+  document.querySelectorAll('#channels-table thead th.sortable').forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.key;
+      const dir = th.classList.contains('sorted-asc') ? -1 : 1;
+      document.querySelectorAll('#channels-table thead th').forEach(h => h.classList.remove('sorted-asc','sorted-desc'));
+      th.classList.add(dir === 1 ? 'sorted-asc' : 'sorted-desc');
+      filteredChannels.sort((a, b) => {
+        const av = a[key] ?? '', bv = b[key] ?? '';
+        return typeof av === 'string' ? av.localeCompare(bv) * dir : (av - bv) * dir;
+      });
+      currentPage = 1;
+      renderTable(filteredChannels);
+    });
+  });
+}
+
+/* ── Filters ─────────────────────────────────────────────────── */
+
+function applyFilters() {
+  const search = document.getElementById('channel-search').value.toLowerCase();
+  const tier   = document.getElementById('filter-tier').value;
+  const autoOnly = document.getElementById('filter-auto-escalated').checked;
+
+  filteredChannels = allChannels.filter(ch => {
+    if (search && !(ch.channel_name || ch.channel_id || '').toLowerCase().includes(search)) return false;
+    if (tier && ch.tier !== tier) return false;
+    if (autoOnly && !ch.auto_escalated) return false;
+    return true;
+  });
+
+  currentPage = 1;
+  renderTable(filteredChannels);
+}
+
+function clearFilters() {
+  document.getElementById('channel-search').value = '';
+  document.getElementById('filter-tier').value = '';
+  document.getElementById('filter-auto-escalated').checked = false;
+  filteredChannels = [...allChannels];
+  currentPage = 1;
+  renderTable(filteredChannels);
+}
+
+/* ── Tier Override ───────────────────────────────────────────── */
+
+function openTierModal(channelId, name, currentTier) {
+  document.getElementById('tier-channel-id').value = channelId;
+  document.getElementById('tier-channel-name').textContent = name;
+  document.getElementById('tier-select').value = currentTier;
+  BF.openModal('tier-modal');
+}
+
+async function submitTierOverride() {
+  const channelId = document.getElementById('tier-channel-id').value;
+  const tier = document.getElementById('tier-select').value;
+  try {
+    await BF.postJSON('/api/override', { channel_id: channelId, action: tier, type: 'channel' });
+    BF.showToast(`Channel tier set to: ${tier}`, 'success');
+    BF.closeModal('tier-modal');
+    loadChannels();
+  } catch (e) {
+    BF.showToast(`Override failed: ${e.message}`, 'error');
+  }
+}
+
+/* ── Channel Whitelist ───────────────────────────────────────── */
+
+function openChannelWhitelistModal(channelId, name) {
+  document.getElementById('ch-wl-id').value = channelId;
+  document.getElementById('ch-wl-name').textContent = name;
+  document.getElementById('ch-wl-reason').value = '';
+  BF.openModal('ch-whitelist-modal');
+}
+
+async function submitChannelWhitelist() {
+  const channelId = document.getElementById('ch-wl-id').value;
+  const reason    = document.getElementById('ch-wl-reason').value.trim();
+  const ok = await BF.whitelistItem('channel', channelId, reason);
+  if (ok) { BF.closeModal('ch-whitelist-modal'); loadChannels(); }
+}
+
+/* ── Export ──────────────────────────────────────────────────── */
+
+function exportChannelsCSV() {
+  BF.exportDataToCSV(filteredChannels, [
+    { label: 'Channel ID',      key: 'channel_id' },
+    { label: 'Channel Name',    key: 'channel_name' },
+    { label: 'Videos Analyzed', key: 'videos_analyzed' },
+    { label: 'Videos Flagged',  key: 'videos_flagged' },
+    { label: 'Flag %',          key: 'flagged_percentage' },
+    { label: 'Avg Length (s)',  key: 'avg_video_length' },
+    { label: 'Upload Freq/wk',  key: 'upload_frequency' },
+    { label: 'Tier',            key: 'tier' },
+    { label: 'Auto Escalated',  key: 'auto_escalated' },
+  ], 'brainrotfilter_channels.csv');
+}
+
+/* ── Init ────────────────────────────────────────────────────── */
+
+document.addEventListener('DOMContentLoaded', () => {
+  let searchTimeout;
+  document.getElementById('channel-search').addEventListener('input', () => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(applyFilters, 300);
+  });
+  document.getElementById('filter-tier').addEventListener('change', applyFilters);
+  document.getElementById('filter-auto-escalated').addEventListener('change', applyFilters);
+
+  // Check for channel filter from query string
+  const urlChannel = new URLSearchParams(window.location.search).get('channel');
+  if (urlChannel) {
+    document.getElementById('channel-search').value = urlChannel;
+  }
+
+  loadChannels();
+});
+</script>
+{% endblock %}

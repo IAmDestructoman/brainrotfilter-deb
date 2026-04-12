@@ -1,0 +1,68 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	@echo "No build step needed (pure Python)"
+
+override_dh_auto_install:
+	# Create directories
+	install -d $(CURDIR)/debian/brainrotfilter/opt/brainrotfilter
+	install -d $(CURDIR)/debian/brainrotfilter/opt/brainrotfilter/src/brainrotfilter
+	install -d $(CURDIR)/debian/brainrotfilter/etc/brainrotfilter
+	install -d $(CURDIR)/debian/brainrotfilter/etc/brainrotfilter/ssl
+	install -d $(CURDIR)/debian/brainrotfilter/var/lib/brainrotfilter
+	install -d $(CURDIR)/debian/brainrotfilter/var/log/brainrotfilter
+	install -d $(CURDIR)/debian/brainrotfilter/usr/share/brainrotfilter/www/templates
+	install -d $(CURDIR)/debian/brainrotfilter/usr/share/brainrotfilter/www/static/css
+	install -d $(CURDIR)/debian/brainrotfilter/usr/share/brainrotfilter/www/static/js
+	install -d $(CURDIR)/debian/brainrotfilter/usr/local/bin/brainrotfilter
+	install -d $(CURDIR)/debian/brainrotfilter/etc/squid/conf.d
+	install -d $(CURDIR)/debian/brainrotfilter/lib/systemd/system
+
+	# Install Python source
+	install -m 644 $(CURDIR)/src/brainrotfilter/*.py \
+		$(CURDIR)/debian/brainrotfilter/opt/brainrotfilter/src/brainrotfilter/
+
+	# Install requirements
+	install -m 644 $(CURDIR)/requirements.txt \
+		$(CURDIR)/debian/brainrotfilter/opt/brainrotfilter/
+
+	# Install templates
+	install -m 644 $(CURDIR)/templates/*.html \
+		$(CURDIR)/debian/brainrotfilter/usr/share/brainrotfilter/www/templates/
+
+	# Install static files
+	install -m 644 $(CURDIR)/static/css/*.css \
+		$(CURDIR)/debian/brainrotfilter/usr/share/brainrotfilter/www/static/css/
+	install -m 644 $(CURDIR)/static/js/*.js \
+		$(CURDIR)/debian/brainrotfilter/usr/share/brainrotfilter/www/static/js/
+
+	# Install data files
+	install -m 644 $(CURDIR)/data/keywords.json \
+		$(CURDIR)/debian/brainrotfilter/etc/brainrotfilter/keywords.json
+	install -m 644 $(CURDIR)/data/community-keywords.json \
+		$(CURDIR)/debian/brainrotfilter/etc/brainrotfilter/community-keywords.json
+
+	# Install shell scripts
+	install -m 755 $(CURDIR)/scripts/squid_redirector.sh \
+		$(CURDIR)/debian/brainrotfilter/usr/local/bin/brainrotfilter/
+	install -m 755 $(CURDIR)/scripts/squid_acl_helper.sh \
+		$(CURDIR)/debian/brainrotfilter/usr/local/bin/brainrotfilter/
+	install -m 755 $(CURDIR)/scripts/state_killer.sh \
+		$(CURDIR)/debian/brainrotfilter/usr/local/bin/brainrotfilter/
+
+	# Install Squid config snippet
+	install -m 644 $(CURDIR)/debian/brainrotfilter-squid.conf \
+		$(CURDIR)/debian/brainrotfilter/etc/squid/conf.d/brainrotfilter.conf
+
+	# Install systemd service
+	install -m 644 $(CURDIR)/debian/brainrotfilter.service \
+		$(CURDIR)/debian/brainrotfilter/lib/systemd/system/
+
+override_dh_auto_test:
+	@echo "Skipping tests during package build"
+
+override_dh_auto_clean:
+	@echo "Nothing to clean"

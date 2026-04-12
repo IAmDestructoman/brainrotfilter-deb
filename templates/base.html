@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}BrainrotFilter{% endblock %} — Admin Panel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css">
+  {% block head %}{% endblock %}
+  <style>
+    /* Inline critical above-fold */
+    body { visibility: visible; }
+  </style>
+</head>
+<body>
+
+<!-- Sidebar backdrop (mobile) -->
+<div id="sidebar-backdrop" class="sidebar-backdrop"></div>
+
+<!-- App shell -->
+<div class="app-shell">
+
+  <!-- ── Sidebar ──────────────────────────────────────────── -->
+  <aside id="sidebar" class="sidebar" role="navigation" aria-label="Main navigation">
+
+    <!-- Logo -->
+    <a href="/" class="sidebar-logo" aria-label="BrainrotFilter Home">
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <rect width="32" height="32" rx="8" fill="#00b4d8" fill-opacity="0.15"/>
+        <rect x="1" y="1" width="30" height="30" rx="7" stroke="#00b4d8" stroke-width="1.5" stroke-opacity="0.4"/>
+        <!-- Shield -->
+        <path d="M16 5L7 9v7c0 5.25 3.85 10.15 9 11.35C22.15 26.15 26 21.25 26 16V9L16 5z" fill="none" stroke="#00b4d8" stroke-width="1.8" stroke-linejoin="round"/>
+        <!-- Filter icon inside -->
+        <path d="M12 13h8M13.5 16h5M15 19h2" stroke="#00b4d8" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <span class="sidebar-logo-text">Brainrot<span>Filter</span></span>
+    </a>
+
+    <!-- Navigation -->
+    <nav class="sidebar-nav">
+      <span class="nav-section-label">Overview</span>
+
+      <a href="/" class="nav-item {% if active_page == 'dashboard' %}active{% endif %}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+          <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+        </svg>
+        Dashboard
+      </a>
+
+      <span class="nav-section-label">Content</span>
+
+      <a href="/videos" class="nav-item {% if active_page == 'videos' %}active{% endif %}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <rect x="2" y="4" width="20" height="16" rx="2"/>
+          <polygon points="10,8 16,12 10,16"/>
+        </svg>
+        Videos
+      </a>
+
+      <a href="/channels" class="nav-item {% if active_page == 'channels' %}active{% endif %}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 00-3-3.87"/>
+          <path d="M16 3.13a4 4 0 010 7.75"/>
+        </svg>
+        Channels
+      </a>
+
+      <a href="/whitelist" class="nav-item {% if active_page == 'whitelist' %}active{% endif %}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M9 11l3 3L22 4"/>
+          <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+        </svg>
+        Whitelist
+      </a>
+
+      <a href="/profiles" class="nav-item {% if active_page == 'profiles' %}active{% endif %}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+        </svg>
+        Profiles
+      </a>
+
+      <a href="/ml" class="nav-item {% if active_page == 'ml' %}active{% endif %}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <rect x="4" y="4" width="16" height="16" rx="2"/>
+          <circle cx="9" cy="9" r="1.5" fill="currentColor"/>
+          <circle cx="15" cy="9" r="1.5" fill="currentColor"/>
+          <circle cx="9" cy="15" r="1.5" fill="currentColor"/>
+          <circle cx="15" cy="15" r="1.5" fill="currentColor"/>
+          <path d="M9 9h6M9 15h6M9 9v6M15 9v6" stroke-opacity="0.4"/>
+        </svg>
+        ML Model
+      </a>
+
+      <a href="/community" class="nav-item {% if active_page == 'community' %}active{% endif %}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M2 12h20M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/>
+        </svg>
+        Community
+      </a>
+
+      <span class="nav-section-label">System</span>
+
+      <a href="/logs" class="nav-item {% if active_page == 'logs' %}active{% endif %}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+          <polyline points="14,2 14,8 20,8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+          <line x1="10" y1="9" x2="8" y2="9"/>
+        </svg>
+        Logs
+      </a>
+
+      <a href="/settings" class="nav-item {% if active_page == 'settings' %}active{% endif %}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+        </svg>
+        Settings
+      </a>
+
+      <a href="/uninstall" class="nav-item {% if active_page == 'uninstall' %}active{% endif %}" style="color:#ef4444;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <polyline points="3,6 5,6 21,6"/>
+          <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+          <line x1="10" y1="11" x2="10" y2="17"/>
+          <line x1="14" y1="11" x2="14" y2="17"/>
+        </svg>
+        Uninstall
+      </a>
+    </nav>
+
+    <!-- Footer -->
+    <div class="sidebar-footer">
+      <div class="version">BrainrotFilter</div>
+      <div>v1.0.6 · pfSense CE</div>
+    </div>
+
+  </aside><!-- /sidebar -->
+
+  <!-- ── Main Wrap ─────────────────────────────────────────── -->
+  <div class="main-wrap">
+
+    <!-- Top header bar -->
+    <header class="topbar" role="banner">
+      <button id="sidebar-toggle" class="topbar-toggle btn-icon" aria-label="Toggle sidebar" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+
+      <span class="topbar-title">{% block page_title %}{% endblock %}</span>
+
+      <div class="status-indicator" aria-live="polite">
+        <div id="status-dot" class="status-dot"></div>
+        <span id="status-label">Checking…</span>
+      </div>
+    </header>
+
+    <!-- Page content -->
+    <main class="page-content" role="main">
+      {% block content %}{% endblock %}
+    </main>
+
+  </div><!-- /main-wrap -->
+
+</div><!-- /app-shell -->
+
+<!-- Toast container -->
+<div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<!-- App JS -->
+<script src="/static/js/app.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,753 @@
+{% extends "base.html" %}
+
+{% block title %}Community Keywords{% endblock %}
+{% block page_title %}Community Keywords{% endblock %}
+
+{% block head %}
+<style>
+  /* ── Community page styles ────────────────────────────────────── */
+  .community-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+  @media (max-width: 900px) { .community-grid { grid-template-columns: 1fr; } }
+
+  .status-card {
+    background: var(--surface-1, #181c2a);
+    border: 1px solid var(--border, #2a2f45);
+    border-radius: 10px;
+    padding: 1.25rem 1.5rem;
+  }
+  .status-card h3 {
+    font-size: .75rem;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--text-muted, #6b7280);
+    margin: 0 0 1rem;
+  }
+  .sync-indicator {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    font-size: .95rem;
+    font-weight: 500;
+    margin-bottom: .9rem;
+  }
+  .sync-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .sync-dot.ok      { background: #22c55e; box-shadow: 0 0 6px #22c55e88; }
+  .sync-dot.warn    { background: #f59e0b; box-shadow: 0 0 6px #f59e0b88; }
+  .sync-dot.off     { background: #6b7280; }
+  .sync-dot.error   { background: #ef4444; box-shadow: 0 0 6px #ef444488; }
+
+  .meta-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: .82rem;
+    padding: .3rem 0;
+    border-bottom: 1px solid var(--border, #2a2f45);
+    color: var(--text-muted, #6b7280);
+  }
+  .meta-row:last-child { border-bottom: none; }
+  .meta-row .val { color: var(--text, #e2e8f0); font-weight: 500; }
+
+  /* Action bar */
+  .action-bar {
+    display: flex;
+    gap: .75rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+  }
+
+  /* Diff table */
+  .diff-panel {
+    background: var(--surface-1, #181c2a);
+    border: 1px solid var(--border, #2a2f45);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+    display: none;
+  }
+  .diff-panel.visible { display: block; }
+  .diff-panel-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border, #2a2f45);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .diff-panel-header h3 { margin: 0; font-size: .9rem; font-weight: 600; }
+  .diff-counts { display: flex; gap: 1rem; font-size: .8rem; }
+  .diff-badge {
+    padding: .2rem .5rem;
+    border-radius: 4px;
+    font-weight: 600;
+  }
+  .diff-badge.added    { background: #22c55e22; color: #22c55e; }
+  .diff-badge.modified { background: #f59e0b22; color: #f59e0b; }
+  .diff-badge.removed  { background: #ef444422; color: #ef4444; }
+  .diff-badge.total    { background: #3b82f622; color: #3b82f6; }
+
+  .diff-table-wrap { overflow-x: auto; }
+  table.diff-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .82rem;
+  }
+  .diff-table th {
+    padding: .5rem 1rem;
+    text-align: left;
+    font-size: .7rem;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    color: var(--text-muted, #6b7280);
+    background: var(--surface-2, #0f1219);
+    border-bottom: 1px solid var(--border, #2a2f45);
+  }
+  .diff-table td {
+    padding: .55rem 1rem;
+    border-bottom: 1px solid var(--border-subtle, #1e2335);
+    vertical-align: middle;
+  }
+  .diff-table tr:last-child td { border-bottom: none; }
+  .diff-table tr.row-added   td:first-child { border-left: 2px solid #22c55e; }
+  .diff-table tr.row-modified td:first-child { border-left: 2px solid #f59e0b; }
+  .diff-table tr.row-removed td:first-child { border-left: 2px solid #ef4444; }
+  .kw-chip {
+    display: inline-block;
+    background: var(--surface-2, #0f1219);
+    border: 1px solid var(--border, #2a2f45);
+    border-radius: 4px;
+    padding: .1rem .5rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .78rem;
+  }
+
+  /* Config form */
+  .config-panel {
+    background: var(--surface-1, #181c2a);
+    border: 1px solid var(--border, #2a2f45);
+    border-radius: 10px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .config-panel h3 {
+    font-size: .75rem;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--text-muted, #6b7280);
+    margin: 0 0 1.1rem;
+  }
+  .form-grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .9rem 1.5rem;
+  }
+  @media (max-width: 700px) { .form-grid-2 { grid-template-columns: 1fr; } }
+  .form-group { display: flex; flex-direction: column; gap: .35rem; }
+  .form-group label { font-size: .78rem; color: var(--text-muted, #6b7280); font-weight: 500; }
+  .form-group input[type="text"],
+  .form-group input[type="number"],
+  .form-group select {
+    background: var(--surface-2, #0f1219);
+    border: 1px solid var(--border, #2a2f45);
+    border-radius: 6px;
+    color: var(--text, #e2e8f0);
+    padding: .45rem .7rem;
+    font-size: .85rem;
+    transition: border-color .15s;
+    width: 100%;
+  }
+  .form-group input:focus,
+  .form-group select:focus { outline: none; border-color: #00b4d8; }
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: .6rem 0;
+    border-bottom: 1px solid var(--border-subtle, #1e2335);
+  }
+  .toggle-row:last-child { border-bottom: none; }
+  .toggle-label { font-size: .87rem; }
+  .toggle-label small { display: block; font-size: .75rem; color: var(--text-muted, #6b7280); }
+  /* Toggle switch */
+  .toggle { position: relative; display: inline-flex; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider {
+    width: 38px; height: 20px;
+    background: var(--border, #2a2f45);
+    border-radius: 20px;
+    cursor: pointer;
+    transition: background .2s;
+    position: relative;
+  }
+  .toggle-slider::after {
+    content: '';
+    position: absolute;
+    left: 3px; top: 3px;
+    width: 14px; height: 14px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform .2s;
+  }
+  .toggle input:checked + .toggle-slider { background: #00b4d8; }
+  .toggle input:checked + .toggle-slider::after { transform: translateX(18px); }
+
+  /* Submission section */
+  .submit-form { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem; }
+  @media (max-width: 700px) { .submit-form { grid-template-columns: 1fr; } }
+  .submit-form .span-2 { grid-column: 1 / -1; }
+
+  /* Submissions table */
+  .submissions-panel {
+    background: var(--surface-1, #181c2a);
+    border: 1px solid var(--border, #2a2f45);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .submissions-panel-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border, #2a2f45);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .submissions-panel-header h3 { margin: 0; font-size: .9rem; font-weight: 600; }
+
+  .empty-state {
+    text-align: center;
+    padding: 2.5rem 1.5rem;
+    color: var(--text-muted, #6b7280);
+    font-size: .88rem;
+  }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .45rem .9rem;
+    border-radius: 6px;
+    font-size: .84rem;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: opacity .15s, transform .1s;
+  }
+  .btn:active { transform: scale(.97); }
+  .btn-primary   { background: #00b4d8; color: #000f1a; }
+  .btn-secondary { background: var(--surface-2, #0f1219); color: var(--text, #e2e8f0); border: 1px solid var(--border, #2a2f45); }
+  .btn-danger    { background: #ef444420; color: #ef4444; border: 1px solid #ef444440; }
+  .btn-success   { background: #22c55e20; color: #22c55e; border: 1px solid #22c55e40; }
+  .btn:disabled  { opacity: .4; cursor: not-allowed; }
+  .btn-sm        { padding: .3rem .65rem; font-size: .78rem; }
+
+  .loading-spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid transparent;
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin .6s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #toast-msg {
+    position: fixed;
+    bottom: 1.5rem; right: 1.5rem;
+    background: var(--surface-1, #181c2a);
+    border: 1px solid var(--border, #2a2f45);
+    border-radius: 8px;
+    padding: .75rem 1.2rem;
+    font-size: .85rem;
+    z-index: 9999;
+    max-width: 360px;
+    display: none;
+    animation: slideIn .2s ease;
+  }
+  .toast-ok    { border-color: #22c55e; color: #22c55e; }
+  .toast-error { border-color: #ef4444; color: #ef4444; }
+  @keyframes slideIn { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform:none; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="toast-msg"></div>
+
+<!-- ── Status section ──────────────────────────────────────────── -->
+<div class="community-grid">
+
+  <!-- Sync Status Card -->
+  <div class="status-card">
+    <h3>Sync Status</h3>
+    <div class="sync-indicator">
+      <div class="sync-dot" id="sync-dot"></div>
+      <span id="sync-label">Loading…</span>
+    </div>
+    <div class="meta-row"><span>Enabled</span><span class="val" id="st-enabled">—</span></div>
+    <div class="meta-row"><span>Strategy</span><span class="val" id="st-strategy">—</span></div>
+    <div class="meta-row"><span>Last Check</span><span class="val" id="st-last-check">—</span></div>
+    <div class="meta-row"><span>Community Version</span><span class="val" id="st-community-ver">—</span></div>
+    <div class="meta-row"><span>Local Version</span><span class="val" id="st-local-ver">—</span></div>
+    <div class="meta-row"><span>Community Keywords</span><span class="val" id="st-kw-count">—</span></div>
+    <div class="meta-row"><span>Backup Available</span><span class="val" id="st-backup">—</span></div>
+  </div>
+
+  <!-- Quick Actions Card -->
+  <div class="status-card">
+    <h3>Actions</h3>
+    <p style="font-size:.82rem;color:var(--text-muted,#6b7280);margin:0 0 1rem;">
+      Check for new community keywords or sync the latest list. Changes are
+      shown as a diff before applying.
+    </p>
+    <div style="display:flex;flex-direction:column;gap:.6rem;">
+      <button class="btn btn-secondary" id="btn-check" onclick="doCheck()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        Check for Updates
+      </button>
+      <button class="btn btn-primary" id="btn-sync" onclick="doSync()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.33"/></svg>
+        Apply Update
+      </button>
+      <button class="btn btn-danger btn-sm" id="btn-rollback" onclick="doRollback()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-4.33"/></svg>
+        Rollback to Backup
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Diff panel (shown after Check or before Sync) ──────────── -->
+<div class="diff-panel" id="diff-panel">
+  <div class="diff-panel-header">
+    <h3>Pending Changes</h3>
+    <div class="diff-counts">
+      <span class="diff-badge added" id="diff-added-badge">+0 added</span>
+      <span class="diff-badge modified" id="diff-modified-badge">0 modified</span>
+      <span class="diff-badge removed" id="diff-removed-badge">0 removed</span>
+      <span class="diff-badge total" id="diff-total-badge">0 total</span>
+    </div>
+  </div>
+  <div class="diff-table-wrap">
+    <table class="diff-table">
+      <thead>
+        <tr>
+          <th>Keyword</th>
+          <th>Category</th>
+          <th>Weight</th>
+          <th>Change</th>
+        </tr>
+      </thead>
+      <tbody id="diff-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ── Configuration ──────────────────────────────────────────── -->
+<div class="config-panel">
+  <h3>Configuration</h3>
+  <div style="margin-bottom:1rem;">
+    <div class="toggle-row">
+      <div class="toggle-label">
+        Enable Community Keywords
+        <small>Opt-in to community-maintained keyword list</small>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="cfg-enabled" onchange="saveConfig()">
+        <div class="toggle-slider"></div>
+      </label>
+    </div>
+    <div class="toggle-row">
+      <div class="toggle-label">
+        Auto-Update
+        <small>Automatically fetch and apply updates on schedule</small>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="cfg-auto-update" onchange="saveConfig()">
+        <div class="toggle-slider"></div>
+      </label>
+    </div>
+  </div>
+  <div class="form-grid-2">
+    <div class="form-group">
+      <label for="cfg-url">Community Keywords URL</label>
+      <input type="text" id="cfg-url" placeholder="https://raw.githubusercontent.com/..." onchange="saveConfig()">
+    </div>
+    <div class="form-group">
+      <label for="cfg-branch">Branch</label>
+      <input type="text" id="cfg-branch" placeholder="main" onchange="saveConfig()">
+    </div>
+    <div class="form-group">
+      <label for="cfg-strategy">Merge Strategy</label>
+      <select id="cfg-strategy" onchange="saveConfig()">
+        <option value="additive">Additive — only add new keywords (safe)</option>
+        <option value="weighted_merge">Weighted Merge — use higher weight if exists</option>
+        <option value="full_sync">Full Sync — replace with community list (destructive)</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="cfg-interval">Auto-Update Interval (hours)</label>
+      <input type="number" id="cfg-interval" min="1" max="720" value="24" onchange="saveConfig()">
+    </div>
+  </div>
+</div>
+
+<!-- ── Submit a Keyword ───────────────────────────────────────── -->
+<div class="config-panel">
+  <h3>Submit a Keyword Suggestion</h3>
+  <p style="font-size:.82rem;color:var(--text-muted,#6b7280);margin:0 0 1rem;">
+    Suggest a new brainrot keyword to be added to the community list. Your
+    suggestion will be staged locally and can then be submitted to GitHub.
+  </p>
+  <form class="submit-form" onsubmit="submitKeyword(event)">
+    <div class="form-group">
+      <label for="sub-keyword">Keyword / Phrase</label>
+      <input type="text" id="sub-keyword" placeholder="e.g. skibidi rizz" required>
+    </div>
+    <div class="form-group">
+      <label for="sub-weight">Weight (1-10)</label>
+      <input type="number" id="sub-weight" min="1" max="10" value="7" required>
+    </div>
+    <div class="form-group">
+      <label for="sub-category">Category</label>
+      <select id="sub-category">
+        <option value="slang">Slang</option>
+        <option value="phrases">Phrases</option>
+        <option value="channel_patterns">Channel Patterns</option>
+        <option value="audio_speech">Audio / Speech</option>
+        <option value="emojis">Emojis</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="sub-evidence">Evidence / Context (optional)</label>
+      <input type="text" id="sub-evidence" placeholder="Where did you see this used?">
+    </div>
+    <div class="span-2" style="text-align:right;">
+      <button type="submit" class="btn btn-primary" id="btn-submit">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Stage Submission
+      </button>
+    </div>
+  </form>
+</div>
+
+<!-- ── Pending Submissions ────────────────────────────────────── -->
+<div class="submissions-panel">
+  <div class="submissions-panel-header">
+    <h3>Pending Submissions</h3>
+    <button class="btn btn-secondary btn-sm" onclick="loadSubmissions()">Refresh</button>
+  </div>
+  <div id="submissions-body">
+    <div class="empty-state">Loading submissions…</div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let _statusData = null;
+
+// ── Init ───────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  loadStatus();
+  loadSubmissions();
+});
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+function toast(msg, type = 'ok') {
+  const el = document.getElementById('toast-msg');
+  el.textContent = msg;
+  el.className = 'toast-' + type;
+  el.style.display = 'block';
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => { el.style.display = 'none'; }, 4000);
+}
+
+// ── Load status ────────────────────────────────────────────────────────────
+async function loadStatus() {
+  try {
+    const r = await fetch('/api/community/status');
+    const data = await r.json();
+    if (!data.ok) { setStatusError('API error'); return; }
+    _statusData = data.status;
+    renderStatus(_statusData);
+    loadConfigForm(_statusData);
+  } catch(e) {
+    setStatusError(e.message);
+  }
+}
+
+function setStatusError(msg) {
+  const dot = document.getElementById('sync-dot');
+  dot.className = 'sync-dot error';
+  document.getElementById('sync-label').textContent = 'Error: ' + msg;
+}
+
+function renderStatus(s) {
+  const dot = document.getElementById('sync-dot');
+  const label = document.getElementById('sync-label');
+  if (!s.enabled) {
+    dot.className = 'sync-dot off';
+    label.textContent = 'Disabled';
+  } else if (s.last_hash) {
+    dot.className = 'sync-dot ok';
+    label.textContent = 'Synced';
+  } else {
+    dot.className = 'sync-dot warn';
+    label.textContent = 'Never synced';
+  }
+  document.getElementById('st-enabled').textContent = s.enabled ? 'Yes' : 'No';
+  document.getElementById('st-strategy').textContent = s.strategy || '—';
+  document.getElementById('st-last-check').textContent = s.last_check
+    ? new Date(s.last_check).toLocaleString() : 'Never';
+  document.getElementById('st-community-ver').textContent = s.community_version || '—';
+  document.getElementById('st-local-ver').textContent = s.local_version || '—';
+  document.getElementById('st-kw-count').textContent = s.keywords_from_community ?? '—';
+  document.getElementById('st-backup').textContent = s.backup_available ? 'Yes' : 'No';
+}
+
+function loadConfigForm(s) {
+  document.getElementById('cfg-enabled').checked = !!s.enabled;
+  document.getElementById('cfg-auto-update').checked = !!s.auto_update;
+  document.getElementById('cfg-url').value = s.url || '';
+  document.getElementById('cfg-branch').value = s.branch || 'main';
+  document.getElementById('cfg-strategy').value = s.strategy || 'additive';
+  document.getElementById('cfg-interval').value = s.interval_hours || 24;
+}
+
+// ── Check for updates ──────────────────────────────────────────────────────
+async function doCheck() {
+  const btn = document.getElementById('btn-check');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading-spinner"></span> Checking…';
+  try {
+    const r = await fetch('/api/community/check', { method: 'POST' });
+    const data = await r.json();
+    if (data.ok && data.diff) {
+      renderDiff(data.diff);
+      toast(data.message || 'Check complete.', 'ok');
+    } else {
+      toast(data.error || 'Check failed.', 'error');
+    }
+  } catch(e) {
+    toast('Network error: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg> Check for Updates`;
+  }
+}
+
+// ── Apply sync ─────────────────────────────────────────────────────────────
+async function doSync() {
+  if (!confirm('Apply community keyword update? Current keywords.json will be backed up first.')) return;
+  const btn = document.getElementById('btn-sync');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading-spinner"></span> Syncing…';
+  try {
+    const r = await fetch('/api/community/sync', { method: 'POST' });
+    const data = await r.json();
+    if (data.ok) {
+      toast(data.message || 'Sync complete.', 'ok');
+      if (data.diff) renderDiff(data.diff);
+      loadStatus();
+    } else {
+      toast(data.error || 'Sync failed.', 'error');
+    }
+  } catch(e) {
+    toast('Network error: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.33"/></svg> Apply Update`;
+  }
+}
+
+// ── Rollback ───────────────────────────────────────────────────────────────
+async function doRollback() {
+  if (!confirm('Restore keywords from backup? This will undo the last sync.')) return;
+  try {
+    const r = await fetch('/api/community/rollback', { method: 'POST' });
+    const data = await r.json();
+    if (data.ok) {
+      toast(data.message, 'ok');
+      loadStatus();
+      hideDiff();
+    } else {
+      toast(data.error || 'Rollback failed.', 'error');
+    }
+  } catch(e) {
+    toast('Network error: ' + e.message, 'error');
+  }
+}
+
+// ── Diff rendering ─────────────────────────────────────────────────────────
+function renderDiff(diff) {
+  const panel = document.getElementById('diff-panel');
+  const tbody = document.getElementById('diff-tbody');
+  panel.classList.add('visible');
+  document.getElementById('diff-added-badge').textContent = '+' + diff.added.length + ' added';
+  document.getElementById('diff-modified-badge').textContent = diff.modified.length + ' modified';
+  document.getElementById('diff-removed-badge').textContent = diff.removed.length + ' removed';
+  document.getElementById('diff-total-badge').textContent = diff.total + ' total';
+
+  const rows = [];
+  for (const item of (diff.added || [])) {
+    rows.push(`<tr class="row-added">
+      <td><span class="kw-chip">${esc(item.keyword)}</span></td>
+      <td>${esc(item.category)}</td>
+      <td>${item.weight}</td>
+      <td><span class="diff-badge added">+ added</span></td>
+    </tr>`);
+  }
+  for (const item of (diff.modified || [])) {
+    rows.push(`<tr class="row-modified">
+      <td><span class="kw-chip">${esc(item.keyword)}</span></td>
+      <td>${esc(item.category)}</td>
+      <td>${item.old_weight} → ${item.new_weight}</td>
+      <td><span class="diff-badge modified">weight up</span></td>
+    </tr>`);
+  }
+  for (const item of (diff.removed || [])) {
+    rows.push(`<tr class="row-removed">
+      <td><span class="kw-chip">${esc(item.keyword)}</span></td>
+      <td>${esc(item.category)}</td>
+      <td>${item.weight}</td>
+      <td><span class="diff-badge removed">− removed</span></td>
+    </tr>`);
+  }
+  if (!rows.length) {
+    rows.push('<tr><td colspan="4" style="text-align:center;color:var(--text-muted,#6b7280);padding:1.5rem;">No changes pending.</td></tr>');
+  }
+  tbody.innerHTML = rows.join('');
+}
+
+function hideDiff() {
+  document.getElementById('diff-panel').classList.remove('visible');
+}
+
+// ── Save config ────────────────────────────────────────────────────────────
+let _configSaveTimer = null;
+async function saveConfig() {
+  clearTimeout(_configSaveTimer);
+  _configSaveTimer = setTimeout(async () => {
+    const payload = {
+      community_keywords_enabled: document.getElementById('cfg-enabled').checked,
+      community_keywords_auto_update: document.getElementById('cfg-auto-update').checked,
+      community_keywords_url: document.getElementById('cfg-url').value.trim(),
+      community_keywords_branch: document.getElementById('cfg-branch').value.trim() || 'main',
+      community_keywords_strategy: document.getElementById('cfg-strategy').value,
+      community_keywords_interval_hours: parseInt(document.getElementById('cfg-interval').value, 10) || 24,
+    };
+    try {
+      const r = await fetch('/api/community/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await r.json();
+      if (data.ok) {
+        toast('Settings saved.', 'ok');
+        loadStatus();
+      } else {
+        toast(data.detail || 'Save failed.', 'error');
+      }
+    } catch(e) {
+      toast('Network error: ' + e.message, 'error');
+    }
+  }, 600);
+}
+
+// ── Submit keyword ─────────────────────────────────────────────────────────
+async function submitKeyword(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btn-submit');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading-spinner"></span> Submitting…';
+  const payload = {
+    keyword: document.getElementById('sub-keyword').value.trim(),
+    weight: parseInt(document.getElementById('sub-weight').value, 10),
+    category: document.getElementById('sub-category').value,
+    evidence: document.getElementById('sub-evidence').value.trim(),
+  };
+  try {
+    const r = await fetch('/api/community/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await r.json();
+    if (data.ok) {
+      toast('Keyword staged: ' + payload.keyword, 'ok');
+      document.getElementById('sub-keyword').value = '';
+      document.getElementById('sub-evidence').value = '';
+      loadSubmissions();
+    } else {
+      toast(data.detail || data.error || 'Submission failed.', 'error');
+    }
+  } catch(e) {
+    toast('Network error: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Stage Submission`;
+  }
+}
+
+// ── Load submissions ───────────────────────────────────────────────────────
+async function loadSubmissions() {
+  const body = document.getElementById('submissions-body');
+  try {
+    const r = await fetch('/api/community/submissions');
+    const data = await r.json();
+    if (!data.ok || !data.submissions.length) {
+      body.innerHTML = '<div class="empty-state">No pending submissions. Use the form above to suggest a keyword.</div>';
+      return;
+    }
+    let html = '<div style="overflow-x:auto"><table class="diff-table"><thead><tr><th>Keyword</th><th>Category</th><th>Weight</th><th>Evidence</th><th>Submitted</th><th>Action</th></tr></thead><tbody>';
+    for (const s of data.submissions) {
+      const date = s.submitted_at ? new Date(s.submitted_at).toLocaleDateString() : '—';
+      const issueBody = encodeURIComponent(s.github_issue_body || '');
+      html += `<tr>
+        <td><span class="kw-chip">${esc(s.keyword)}</span></td>
+        <td>${esc(s.category)}</td>
+        <td>${s.weight}</td>
+        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(s.evidence || '—')}</td>
+        <td>${date}</td>
+        <td>
+          <button class="btn btn-secondary btn-sm" onclick="copyIssue(${esc(JSON.stringify(s.github_issue_body))})">
+            Copy Issue
+          </button>
+        </td>
+      </tr>`;
+    }
+    html += '</tbody></table></div>';
+    body.innerHTML = html;
+  } catch(e) {
+    body.innerHTML = `<div class="empty-state">Error loading submissions: ${esc(e.message)}</div>`;
+  }
+}
+
+function copyIssue(body) {
+  if (!body) return;
+  navigator.clipboard.writeText(body).then(() => {
+    toast('GitHub Issue body copied to clipboard.', 'ok');
+  }).catch(() => {
+    prompt('Copy this GitHub Issue body:', body);
+  });
+}
+
+function esc(str) {
+  if (typeof str !== 'string') str = String(str ?? '');
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+{% endblock %}
