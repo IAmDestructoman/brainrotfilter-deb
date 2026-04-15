@@ -39,11 +39,23 @@ case "$1" in
         # Install polkit rule so the brainrotfilter service user can trigger
         # the privileged brainrotfilter-squid-apply.service without sudo.
         # (NoNewPrivileges=true in the main service unit blocks sudo entirely.)
-        # polkit is a package dependency; create rules.d if it doesn't exist yet
-        # (can happen when polkit is being configured in the same apt run).
-        mkdir -p /etc/polkit-1/rules.d
-        install -m 0644 /usr/share/brainrotfilter/polkit/50-brainrotfilter.rules \
-            /etc/polkit-1/rules.d/50-brainrotfilter.rules
+        #
+        # polkitd >= 0.106 (Ubuntu 23.04+, Debian bookworm+): JS rules
+        # polkitd 0.105   (Ubuntu 22.04, Debian bullseye): pkla local authority
+        POLKIT_VER=$(pkaction --version 2>/dev/null | awk '{print $NF}' || echo "0")
+        POLKIT_MAJOR=$(echo "$POLKIT_VER" | cut -d. -f1)
+        POLKIT_MINOR=$(echo "$POLKIT_VER" | cut -d. -f2)
+        if [ "${POLKIT_MAJOR:-0}" -gt 0 ] || [ "${POLKIT_MINOR:-0}" -ge 106 ] 2>/dev/null; then
+            # Modern polkit: install JS rules file
+            mkdir -p /etc/polkit-1/rules.d
+            install -m 0644 /usr/share/brainrotfilter/polkit/50-brainrotfilter.rules \
+                /etc/polkit-1/rules.d/50-brainrotfilter.rules
+        else
+            # Legacy polkit 0.105: install pkla file
+            mkdir -p /etc/polkit-1/localauthority/50-local.d
+            install -m 0644 /usr/share/brainrotfilter/polkit/50-brainrotfilter.pkla \
+                /etc/polkit-1/localauthority/50-local.d/50-brainrotfilter.pkla
+        fi
 
         # Make the privileged helper script executable
         chmod 0755 /usr/lib/brainrotfilter/scripts/apply_squid_config.sh 2>/dev/null || true

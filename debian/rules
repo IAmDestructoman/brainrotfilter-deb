@@ -54,9 +54,14 @@ override_dh_auto_install:
 	install -m 755 $(CURDIR)/scripts/apply_squid_config.sh \
 		$(CURDIR)/debian/brainrotfilter/usr/lib/brainrotfilter/scripts/
 
-	# Install polkit rule for privileged squid config helper
+	# Install polkit rules for privileged squid config helper.
+	# .rules  = JS format for polkitd >= 0.106 (Ubuntu 23.04+, Debian bookworm+)
+	# .pkla   = local authority format for polkitd 0.105 (Ubuntu 22.04, Debian bullseye)
+	# postinst installs the appropriate file based on polkit version.
 	install -d $(CURDIR)/debian/brainrotfilter/usr/share/brainrotfilter/polkit
 	install -m 644 $(CURDIR)/debian/50-brainrotfilter.rules \
+		$(CURDIR)/debian/brainrotfilter/usr/share/brainrotfilter/polkit/
+	install -m 644 $(CURDIR)/debian/50-brainrotfilter.pkla \
 		$(CURDIR)/debian/brainrotfilter/usr/share/brainrotfilter/polkit/
 
 	# Install Squid config snippet

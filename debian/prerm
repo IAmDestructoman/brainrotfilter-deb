@@ -9,6 +9,10 @@ case "$1" in
         fi
         systemctl disable brainrotfilter.service 2>/dev/null || true
 
+        # Remove polkit rules (both formats)
+        rm -f /etc/polkit-1/rules.d/50-brainrotfilter.rules
+        rm -f /etc/polkit-1/localauthority/50-local.d/50-brainrotfilter.pkla
+
         echo ""
         echo "BrainrotFilter service stopped."
         echo ""

@@ -1,0 +1,12 @@
+# /etc/polkit-1/localauthority/50-local.d/50-brainrotfilter.pkla
+# PolicyKit Local Authority rule for polkitd 0.105 (Ubuntu 22.04 / Debian bullseye).
+# Allows the brainrotfilter system user to start
+# brainrotfilter-squid-apply.service without a password.
+# On polkitd >= 0.106 the JS rules file (50-brainrotfilter.rules) is used instead.
+
+[BrainrotFilter - Allow start of Squid apply helper]
+Identity=unix-user:brainrotfilter
+Action=org.freedesktop.systemd1.manage-units
+ResultAny=yes
+ResultInactive=yes
+ResultActive=yes
