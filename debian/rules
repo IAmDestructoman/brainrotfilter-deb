@@ -19,7 +19,6 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/brainrotfilter/usr/share/brainrotfilter/www/static/js
 	install -d $(CURDIR)/debian/brainrotfilter/usr/lib/brainrotfilter/scripts
 	install -d $(CURDIR)/debian/brainrotfilter/etc/squid/conf.d
-	install -d $(CURDIR)/debian/brainrotfilter/usr/lib/systemd/system
 
 	# Install Python source
 	install -m 644 $(CURDIR)/src/brainrotfilter/*.py \
@@ -64,11 +63,22 @@ override_dh_auto_install:
 	install -m 644 $(CURDIR)/debian/brainrotfilter-squid.conf \
 		$(CURDIR)/debian/brainrotfilter/etc/squid/conf.d/brainrotfilter.conf
 
-	# Install systemd services
-	install -m 644 $(CURDIR)/debian/brainrotfilter.service \
-		$(CURDIR)/debian/brainrotfilter/usr/lib/systemd/system/
+	# systemd service files are handled automatically by dh_installsystemd
+	# (reads debian/brainrotfilter.service and debian/brainrotfilter-squid-apply.service)
+	# Do NOT manually install them here — on Ubuntu 22.04+ /lib -> /usr/lib (usrmerge)
+	# causes dpkg to see duplicate paths and fail with ENOENT on the .dpkg-new file.
+
+override_dh_installsystemd:
+	# Install the privileged helper service manually to lib/systemd/system/
+	# (dh_installsystemd only auto-detects debian/brainrotfilter.service by
+	# default; the squid-apply service has a different name prefix).
+	# Using lib/ (not usr/lib/) works correctly on both usrmerge and non-merged
+	# systems.  Do NOT also install to usr/lib/ — on Ubuntu 22.04+
+	# /lib -> usr/lib so dpkg would see duplicate paths.
+	install -d $(CURDIR)/debian/brainrotfilter/lib/systemd/system/
 	install -m 644 $(CURDIR)/debian/brainrotfilter-squid-apply.service \
-		$(CURDIR)/debian/brainrotfilter/usr/lib/systemd/system/
+		$(CURDIR)/debian/brainrotfilter/lib/systemd/system/brainrotfilter-squid-apply.service
+	dh_installsystemd
 
 override_dh_auto_test:
 	@echo "Skipping tests during package build"
