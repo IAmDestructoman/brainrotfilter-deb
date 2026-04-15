@@ -344,6 +344,7 @@ class AnalyzeRequest(BaseModel):
 
     video_id: str
     priority: bool = False  # Jump to front of queue
+    client_ip: Optional[str] = None  # Caller's IP (logged for state killing)
 
 
 class AnalyzeResponse(BaseModel):
@@ -359,6 +360,7 @@ class CheckRequest(BaseModel):
 
     video_id: Optional[str] = None
     channel_id: Optional[str] = None
+    client_ip: Optional[str] = None  # Requesting client IP (for state killer tracking)
 
 
 class CheckResponse(BaseModel):

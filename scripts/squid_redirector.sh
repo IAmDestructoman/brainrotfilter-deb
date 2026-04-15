@@ -115,7 +115,7 @@ while IFS= read -r line; do
     response=$(curl -s --max-time "$CURL_TIMEOUT" \
         -X POST "${BRAINROT_API}/api/check" \
         -H "Content-Type: application/json" \
-        -d "{\"video_id\":\"${video_id}\"}" 2>/dev/null)
+        -d "{\"video_id\":\"${video_id}\",\"client_ip\":\"${client_ip}\"}" 2>/dev/null)
 
     # On curl failure or timeout -- pass through
     if [ $? -ne 0 ] || [ -z "$response" ]; then

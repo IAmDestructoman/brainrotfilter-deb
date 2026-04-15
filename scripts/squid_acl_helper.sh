@@ -85,12 +85,29 @@ json_field() {
     echo "$_json" | sed -n 's/.*"'"$_field"'"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1
 }
 
-# -- Main loop ----------------------------------------------------------------
-log "started -- API=${BRAINROT_API}"
+# -- Filter mode (optional first argument) ------------------------------------
+# When two external_acl_type instances are declared — one for hard blocks and
+# one for soft blocks — pass a mode argument so each returns OK only for the
+# relevant status tier:
+#   "block"      -- return OK only for status=block
+#   "soft_block" -- return OK only for status=soft_block
+#   (omitted)    -- return OK for both (default, backwards-compatible)
+FILTER_MODE="${1:-both}"
 
-while IFS= read -r url; do
-    # Strip leading/trailing whitespace
-    url=$(echo "$url" | tr -d '\r')
+# -- Main loop ----------------------------------------------------------------
+log "started -- API=${BRAINROT_API} mode=${FILTER_MODE}"
+
+while IFS= read -r line; do
+    # Strip carriage returns
+    line=$(echo "$line" | tr -d '\r')
+
+    # Squid sends: URL SRC_IP  (space-separated, from %URI %SRC)
+    url="${line%% *}"
+    src_ip="${line##* }"
+    # If there was no space (only URL), src_ip equals url
+    if [ "$src_ip" = "$url" ]; then
+        src_ip=""
+    fi
 
     video_id=$(extract_video_id "$url")
 
@@ -100,11 +117,18 @@ while IFS= read -r url; do
         continue
     fi
 
+    # Build JSON body — include client_ip when available
+    if [ -n "$src_ip" ]; then
+        json_body="{\"video_id\":\"${video_id}\",\"client_ip\":\"${src_ip}\"}"
+    else
+        json_body="{\"video_id\":\"${video_id}\"}"
+    fi
+
     # Call the BrainrotFilter API
     response=$(curl -s --max-time "$CURL_TIMEOUT" \
         -X POST "${BRAINROT_API}/api/check" \
         -H "Content-Type: application/json" \
-        -d "{\"video_id\":\"${video_id}\"}" 2>/dev/null)
+        -d "$json_body" 2>/dev/null)
 
     # On failure -- allow (fail open)
     if [ $? -ne 0 ] || [ -z "$response" ]; then
@@ -116,9 +140,21 @@ while IFS= read -r url; do
     action=$(json_field "action" "$response")
 
     case "$action" in
-        block|soft_block)
-            log "blocked ${video_id}"
-            echo "OK"
+        block)
+            if [ "$FILTER_MODE" = "block" ] || [ "$FILTER_MODE" = "both" ]; then
+                log "hard-blocked ${video_id}"
+                echo "OK"
+            else
+                echo "ERR"
+            fi
+            ;;
+        soft_block)
+            if [ "$FILTER_MODE" = "soft_block" ] || [ "$FILTER_MODE" = "both" ]; then
+                log "soft-blocked ${video_id}"
+                echo "OK"
+            else
+                echo "ERR"
+            fi
             ;;
         *)
             echo "ERR"

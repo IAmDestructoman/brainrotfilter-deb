@@ -145,6 +145,7 @@ class AnalysisQueue:
     def __init__(self, max_workers: int = 4, maxsize: int = 100) -> None:
         self._queue: queue.PriorityQueue = queue.PriorityQueue(maxsize=maxsize)
         self._in_flight: set = set()
+        self._job_steps: Dict[str, Dict[str, Any]] = {}  # video_id → step state
         self._lock = threading.Lock()
         self._executor = ThreadPoolExecutor(
             max_workers=max_workers,
@@ -187,6 +188,37 @@ class AnalysisQueue:
     def size(self) -> int:
         return self._queue.qsize()
 
+    def set_step(self, video_id: str, step: str, title: str = "") -> None:
+        """Update the current processing step for an in-flight job (called from worker thread)."""
+        with self._lock:
+            job = self._job_steps.get(video_id)
+            if job is not None:
+                job["step"] = step
+                if title and not job.get("title"):
+                    job["title"] = title
+
+    def _begin_job(self, video_id: str) -> None:
+        with self._lock:
+            self._job_steps[video_id] = {
+                "video_id": video_id,
+                "step": "starting",
+                "title": "",
+                "started_at": time.monotonic(),
+            }
+
+    def _end_job(self, video_id: str) -> None:
+        with self._lock:
+            self._job_steps.pop(video_id, None)
+
+    def get_in_progress(self) -> List[Dict[str, Any]]:
+        """Return snapshot of all actively-running jobs with their current step."""
+        with self._lock:
+            now = time.monotonic()
+            return [
+                {**job, "elapsed_s": round(now - job["started_at"], 1)}
+                for job in self._job_steps.values()
+            ]
+
     def _worker(self) -> None:
         """Worker thread: consume jobs from the queue forever."""
         while self._running:
@@ -194,6 +226,7 @@ class AnalysisQueue:
                 _, _, video_id = self._queue.get(timeout=2)
             except queue.Empty:
                 continue
+            self._begin_job(video_id)
             try:
                 if _USE_PARALLEL_PIPELINE and _parallel_analyze is not None:
                     _parallel_analyze(video_id)
@@ -202,6 +235,7 @@ class AnalysisQueue:
             except Exception as exc:
                 logger.error("Unhandled error analyzing %s: %s", video_id, exc)
             finally:
+                self._end_job(video_id)
                 with self._lock:
                     self._in_flight.discard(video_id)
                 self._queue.task_done()
@@ -228,6 +262,7 @@ def _run_analysis(video_id: str) -> None:
     start = time.monotonic()
 
     # 1. Fetch metadata from YouTube API
+    analysis_queue.set_step(video_id, "metadata")
     yt_data: Optional[Dict[str, Any]] = None
     try:
         from youtube_api import get_video_details
@@ -245,6 +280,7 @@ def _run_analysis(video_id: str) -> None:
     duration_s = yt_data.get("duration_seconds", 0) if yt_data else 0
 
     # 2. Keyword analysis (fast — no download)
+    analysis_queue.set_step(video_id, "keywords", title=title)
     keyword_result = None
     keyword_score = 0.0
     keyword_matches = []
@@ -266,6 +302,7 @@ def _run_analysis(video_id: str) -> None:
         logger.error("Keyword analysis failed for %s: %s", video_id, exc)
 
     # 3. Scene analysis (requires video download)
+    analysis_queue.set_step(video_id, "scene")
     scene_score = 0.0
     scene_details_raw: Dict[str, Any] = {}
     try:
@@ -282,6 +319,7 @@ def _run_analysis(video_id: str) -> None:
         logger.error("Scene analysis failed for %s: %s", video_id, exc)
 
     # 4. Audio analysis (requires the video downloaded by scene analyzer to be re-used
+    analysis_queue.set_step(video_id, "audio")
     #    or downloaded fresh — here we do a fresh minimal download for audio)
     audio_score = 0.0
     audio_details_raw: Dict[str, Any] = {}
@@ -306,6 +344,7 @@ def _run_analysis(video_id: str) -> None:
         logger.error("Audio analysis failed for %s: %s", video_id, exc)
 
     # 5. Combined score + tier
+    analysis_queue.set_step(video_id, "scoring")
     combined_score = config.compute_combined_score(keyword_score, scene_score, audio_score)
     status_str = config.score_to_status(combined_score)
 
@@ -511,12 +550,35 @@ async def api_analyze(req: AnalyzeRequest) -> AnalyzeResponse:
     if not video_id:
         raise HTTPException(status_code=400, detail="video_id is required")
 
+    # Log the client IP so the state killer can find active viewers later
+    if req.client_ip:
+        try:
+            from models import RequestLog, ActionTaken
+            db.log_request(RequestLog(
+                client_ip=req.client_ip,
+                video_id=video_id,
+                channel_id="",
+                timestamp=datetime.utcnow(),
+                action_taken=ActionTaken.PENDING,
+            ))
+        except Exception:
+            pass
+
     queued = analysis_queue.enqueue(video_id, priority=req.priority)
     return AnalyzeResponse(
         video_id=video_id,
         queued=queued,
         message="Queued for analysis" if queued else "Already in queue or duplicate",
     )
+
+
+@app.get("/api/analysis/status")
+async def api_analysis_status() -> Dict[str, Any]:
+    """Return current analysis queue state including in-progress jobs with their step."""
+    return {
+        "queue_size": analysis_queue.size(),
+        "in_progress": analysis_queue.get_in_progress(),
+    }
 
 
 @app.get("/api/status/{video_id}")
@@ -542,22 +604,66 @@ async def api_status(video_id: str) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+def _redirect_host() -> str:
+    """Return the IP/hostname that remote browsers can use to reach this service.
+
+    service_host is the bind address (often 0.0.0.0), which is not routable
+    from a client browser.  When it is 0.0.0.0 we auto-detect the primary
+    outbound IP so that block/warning redirect URLs actually work.
+    """
+    host = config.service_host
+    if host and host != "0.0.0.0":
+        return host
+    import socket
+    try:
+        # Connecting a UDP socket does not send any data but forces the OS to
+        # pick the outbound interface, revealing the primary non-loopback IP.
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            return s.getsockname()[0]
+    except Exception:
+        return "127.0.0.1"
+
+
 @app.post("/api/check", response_model=CheckResponse)
 async def api_check(req: CheckRequest) -> CheckResponse:
     """
     Fast block check for Squid.
     Checks both video_id and channel_id against the DB.
     """
-    service_host = config.service_host
+    service_host = _redirect_host()
     port = config.service_port
+
+    def _log_client(video_id: str = "", channel_id: str = "", action: str = "allow") -> None:
+        """Log the requesting client IP so the state killer can find active viewers."""
+        if not req.client_ip:
+            return
+        try:
+            from models import RequestLog, ActionTaken
+            action_map = {
+                "block": ActionTaken.BLOCK,
+                "soft_block": ActionTaken.SOFT_BLOCK,
+                "allow": ActionTaken.ALLOW,
+            }
+            db.log_request(RequestLog(
+                client_ip=req.client_ip,
+                video_id=video_id,
+                channel_id=channel_id,
+                timestamp=datetime.utcnow(),
+                action_taken=action_map.get(action, ActionTaken.ALLOW),
+            ))
+        except Exception:
+            pass
 
     if req.video_id:
         vid = req.video_id.strip()
         if db.is_whitelisted(vid, "video"):
+            _log_client(video_id=vid, action="allow")
             return CheckResponse(action="allow", video_id=vid, reason="whitelisted")
 
         status = db.get_video_status(vid)
         if status == "block":
+            _log_client(video_id=vid, action="block")
             return CheckResponse(
                 action="block",
                 video_id=vid,
@@ -565,6 +671,7 @@ async def api_check(req: CheckRequest) -> CheckResponse:
                 reason="blocked",
             )
         if status == "soft_block":
+            _log_client(video_id=vid, action="soft_block")
             return CheckResponse(
                 action="soft_block",
                 video_id=vid,
@@ -575,10 +682,12 @@ async def api_check(req: CheckRequest) -> CheckResponse:
     if req.channel_id:
         ch = req.channel_id.strip()
         if db.is_whitelisted(ch, "channel"):
+            _log_client(channel_id=ch, action="allow")
             return CheckResponse(action="allow", channel_id=ch, reason="channel_whitelisted")
 
         tier = db.get_channel_tier(ch)
         if tier == "block":
+            _log_client(channel_id=ch, action="block")
             return CheckResponse(
                 action="block",
                 channel_id=ch,
@@ -586,6 +695,7 @@ async def api_check(req: CheckRequest) -> CheckResponse:
                 reason="channel_blocked",
             )
         if tier == "soft_block":
+            _log_client(channel_id=ch, action="soft_block")
             return CheckResponse(
                 action="soft_block",
                 channel_id=ch,
@@ -666,6 +776,58 @@ async def api_videos(
         "per_page": per_page,
         "pages": math.ceil(total / per_page) if total > 0 else 1,
         "items": items,
+    }
+
+
+@app.post("/api/videos/recalculate")
+async def api_videos_recalculate() -> Dict[str, Any]:
+    """Re-compute combined_score and status for all non-manually-overridden videos.
+
+    Uses current config weights/thresholds against the individual scores already
+    stored in the database.  Manual overrides are left untouched.
+    """
+    rows = db.get_all_videos_for_recalculate()
+
+    updates: List[Dict[str, Any]] = []
+    breakdown: Dict[str, int] = {}
+    status_changed = 0
+
+    for row in rows:
+        new_score = config.compute_combined_score(
+            keyword=row.get("keyword_score") or 0,
+            scene=row.get("scene_score") or 0,
+            audio=row.get("audio_score") or 0,
+            comment=row.get("comment_score") or 0,
+            engagement=row.get("engagement_score") or 0,
+            thumbnail=row.get("thumbnail_score") or 0,
+            shorts_bonus=row.get("shorts_score") or 0,
+        )
+        new_status = config.score_to_status(new_score)
+        old_status = row.get("status") or "allow"
+        old_score = float(row.get("combined_score") or 0)
+
+        score_changed = abs(new_score - old_score) > 0.005
+        if score_changed or new_status != old_status:
+            updates.append(
+                {
+                    "video_id": row["video_id"],
+                    "combined_score": new_score,
+                    "status": new_status,
+                }
+            )
+            if new_status != old_status:
+                key = f"{old_status}\u2192{new_status}"
+                breakdown[key] = breakdown.get(key, 0) + 1
+                status_changed += 1
+
+    if updates:
+        db.update_video_scores_bulk(updates)
+
+    return {
+        "total": len(rows),
+        "recalculated": len(updates),
+        "changed": status_changed,
+        "breakdown": breakdown,
     }
 
 

@@ -276,12 +276,6 @@ url_rewrite_access allow youtube_domains
 url_rewrite_access deny all
 url_rewrite_bypass on
 
-# -- External ACL --
-external_acl_type brainrot_check ttl=60 negative_ttl=10 %URI %SRC \\
-    {SCRIPTS_DIR}/squid_acl_helper.sh
-acl brainrot_blocked external brainrot_check
-http_access deny brainrot_blocked
-
 # -- Disable cache for YouTube --
 acl youtube_nocache dstdomain {' '.join(YOUTUBE_DOMAINS)}
 cache deny youtube_nocache
@@ -297,6 +291,69 @@ http_access allow localhost
 
         conf_path = CONFIG_DIR / "squid_brainrot.conf"
         conf_path.write_text(squid_conf)
+
+        # Write the conf.d snippet — this goes in /etc/squid/conf.d/ which is
+        # included by the stock squid.conf BEFORE http_access allow localnet.
+        # That ordering lets us deny blocked videos before the allow-all fires.
+        #
+        # We use two separate external_acl_type instances so hard blocks and
+        # soft blocks can redirect to different pages.
+        import socket as _socket
+        try:
+            with _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM) as _s:
+                _s.connect(("8.8.8.8", 80))
+                _redirect_ip = _s.getsockname()[0]
+        except Exception:
+            _redirect_ip = "127.0.0.1"
+        _port = self.config.service_port
+        confd_content = (
+            "# BrainrotFilter Squid ACL -- managed by BrainrotFilter wizard\n"
+            f"# Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+            "#\n"
+            "# Loaded via 'include /etc/squid/conf.d/*.conf' BEFORE http_access allow localnet.\n"
+            "# Deny rules here fire before the catch-all allow, making blocking effective.\n"
+            "\n"
+            "# Hard-block tier (status=block) -- redirect to block page\n"
+            f"external_acl_type brainrot_block_check ttl=60 negative_ttl=30 %URI %SRC {SCRIPTS_DIR}/squid_acl_helper.sh block\n"
+            "acl brainrot_hard_blocked external brainrot_block_check\n"
+            f"deny_info http://{_redirect_ip}:{_port}/blocked brainrot_hard_blocked\n"
+            "http_access deny brainrot_hard_blocked\n"
+            "\n"
+            "# Soft-block tier (status=soft_block) -- redirect to warning page\n"
+            f"external_acl_type brainrot_soft_check ttl=60 negative_ttl=30 %URI %SRC {SCRIPTS_DIR}/squid_acl_helper.sh soft_block\n"
+            "acl brainrot_soft_blocked external brainrot_soft_check\n"
+            f"deny_info http://{_redirect_ip}:{_port}/warning brainrot_soft_blocked\n"
+            "http_access deny brainrot_soft_blocked\n"
+            "\n"
+            "# Delay pool — throttle YouTube CDN (googlevideo.com) per-client\n"
+            "# Prevents the browser/app from buffering the whole video before\n"
+            "# analysis completes (analysis window is typically 30-120 s).\n"
+            "#\n"
+            "# Class 2 = per-host limit; aggregate is unlimited so multiple\n"
+            "# clients can each reach the per-host cap simultaneously.\n"
+            "#\n"
+            "#   restore rate : 1 048 576 B/s  =  8 Mbit/s per client\n"
+            "#   bucket size  : 8 388 608 B    =  8 MB burst allowance\n"
+            "#\n"
+            "# Adjust restore rate to balance playback quality vs buffer cap:\n"
+            "#   524288  = 4 Mbit/s   (limits 4K, fine for 1080p)\n"
+            "#   1048576 = 8 Mbit/s   (fine for 1080p, degrades 4K)\n"
+            "#   2097152 = 16 Mbit/s  (sufficient for 4K)\n"
+            "acl youtube_cdn_throttle dstdomain .googlevideo.com\n"
+            "delay_pools 1\n"
+            "delay_class 1 2\n"
+            "delay_parameters 1 -1/-1 1048576/8388608\n"
+            "delay_access 1 allow youtube_cdn_throttle\n"
+            "delay_access 1 deny all\n"
+        )
+        confd_request = DATA_DIR / "squid_confd_content"
+        try:
+            confd_request.write_text(confd_content)
+        except Exception as exc:
+            return {
+                "success": False,
+                "error": f"Could not write conf.d request file {confd_request}: {exc}",
+            }
 
         # Add include to main squid.conf if not present.
         #

@@ -45,6 +45,10 @@ ProtectHome=true
 ReadWritePaths=/var/lib/brainrotfilter /var/log/brainrotfilter /etc/brainrotfilter /tmp
 PrivateTmp=false
 
+# Capabilities — needed for conntrack state killing (net connection tracking)
+CapabilityBoundingSet=CAP_NET_ADMIN
+AmbientCapabilities=CAP_NET_ADMIN
+
 # Resource limits
 LimitNOFILE=65536
 
