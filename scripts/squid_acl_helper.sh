@@ -140,28 +140,25 @@ while IFS= read -r line; do
         continue
     fi
 
-    # Determine if this URL is a "playback trigger" (the one the user is about
-    # to watch) or a passive reference like a UI thumbnail. Only deny playback
-    # triggers; denying thumbnails breaks the home page / sidebar layout and
-    # exposes no content to the user.
+    # Only ACTIVE-playback signals deny.  Anything else — thumbnails, qoe
+    # telemetry, timedtext, preview metadata — passes through without even
+    # calling the API.  This keeps home-page rendering fast and avoids
+    # false denials.
     is_playback=0
     case "$url" in
         *youtube.com/watch*|*youtube.com/shorts/*|*youtube.com/embed/*|*youtu.be/*)
             is_playback=1 ;;
-        *youtube.com/api/stats/watchtime*|*youtube.com/api/stats/qoe*|*youtube.com/api/stats/playback*)
+        *youtube.com/api/stats/watchtime*)
+            # watchtime specifically tracks viewing duration of the
+            # currently playing video (not other home-feed cards).
             is_playback=1 ;;
-        *youtube.com/api/timedtext*)
-            is_playback=1 ;;
-        *ytimg.com/sb/*)
-            # Storyboards load only during active playback scrubbing.
-            is_playback=1 ;;
-        *ytimg.com/vi/*|*ytimg.com/vi_webp/*)
-            # Passive thumbnails in UI — never deny.
-            is_playback=0 ;;
-        # NOTE: /youtubei/v1/player fires for home-feed preview metadata,
-        # not just the actively playing video — leave it unmarked so we
-        # don't break the home page rendering.
     esac
+
+    # Non-playback URL — short-circuit before any API call.
+    if [ "$is_playback" = "0" ]; then
+        echo "ERR"
+        continue
+    fi
 
     # Build JSON body — include client_ip when available
     if [ -n "$src_ip" ]; then
@@ -187,7 +184,7 @@ while IFS= read -r line; do
 
     case "$action" in
         block)
-            if [ "$is_playback" = "1" ] && { [ "$FILTER_MODE" = "block" ] || [ "$FILTER_MODE" = "both" ]; }; then
+            if [ "$FILTER_MODE" = "block" ] || [ "$FILTER_MODE" = "both" ]; then
                 log "hard-blocked ${video_id}"
                 echo "OK"
             else
@@ -195,7 +192,7 @@ while IFS= read -r line; do
             fi
             ;;
         soft_block)
-            if [ "$is_playback" = "1" ] && { [ "$FILTER_MODE" = "soft_block" ] || [ "$FILTER_MODE" = "both" ]; }; then
+            if [ "$FILTER_MODE" = "soft_block" ] || [ "$FILTER_MODE" = "both" ]; then
                 log "soft-blocked ${video_id}"
                 echo "OK"
             else

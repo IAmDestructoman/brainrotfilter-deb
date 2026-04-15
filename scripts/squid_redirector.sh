@@ -146,20 +146,12 @@ while IFS= read -r line; do
     case "$url" in
         *youtube.com/watch*|*youtube.com/shorts/*|*youtube.com/embed/*|*youtu.be/*)
             is_playback=1 ;;
-        *youtube.com/api/stats/watchtime*|*youtube.com/api/stats/qoe*|*youtube.com/api/stats/playback*)
-            # Stats URLs fire only for the video actively playing, never for
-            # sidebar previews or home-feed metadata fetches.
+        *youtube.com/api/stats/watchtime*)
+            # Only /watchtime is truly tied to the actively-playing video.
+            # /qoe, /playback, /timedtext, /youtubei/v1/player, and
+            # storyboards all fire for home-feed previews as well and
+            # would cause the queue to flood on scroll.
             is_playback=1 ;;
-        *youtube.com/api/timedtext*)
-            # Captions fetched for the active video only.
-            is_playback=1 ;;
-        *ytimg.com/sb/*)
-            # Storyboards only load during active playback (scrub preview).
-            is_playback=1 ;;
-        # NOTE: /youtubei/v1/player and /youtubei/v1/next fire for every
-        # video in the home feed as YouTube preloads metadata/manifests
-        # for previews. Do NOT treat those as playback — would queue the
-        # entire home page.
     esac
 
     # Passive thumbnail or similar — skip API entirely.  Drastically reduces
