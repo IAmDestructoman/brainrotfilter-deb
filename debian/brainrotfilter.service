@@ -26,7 +26,7 @@ RestartSec=5
 # resolve correctly but broke absolute imports like "import audio_analyzer"
 # in parallel_analyzer — those imports resolved to None in thread workers.
 Environment=PYTHONPATH=/opt/brainrotfilter/src
-Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=PATH=/opt/brainrotfilter/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=BRAINROT_DB_PATH=/var/lib/brainrotfilter/brainrotfilter.db
 Environment=BRAINROT_KEYWORDS_PATH=/etc/brainrotfilter/keywords.json
 Environment=BRAINROT_CONFIG_DIR=/etc/brainrotfilter

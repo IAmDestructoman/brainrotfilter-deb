@@ -55,6 +55,24 @@ extract_video_id() {
             _vid="${_vid%%#*}"
             _vid="${_vid%%/*}"
             ;;
+        *ytimg.com/vi_webp/*)
+            # Thumbnail URL: https://i.ytimg.com/vi_webp/VIDEO_ID/...
+            _vid="${_url#*ytimg.com/vi_webp/}"
+            _vid="${_vid%%/*}"
+            _vid="${_vid%%\?*}"
+            ;;
+        *ytimg.com/vi/*)
+            # Thumbnail URL: https://i.ytimg.com/vi/VIDEO_ID/...
+            _vid="${_url#*ytimg.com/vi/}"
+            _vid="${_vid%%/*}"
+            _vid="${_vid%%\?*}"
+            ;;
+        *ytimg.com/sb/*)
+            # Storyboard URL (during playback): https://i.ytimg.com/sb/VIDEO_ID/...
+            _vid="${_url#*ytimg.com/sb/}"
+            _vid="${_vid%%/*}"
+            _vid="${_vid%%\?*}"
+            ;;
         *)
             _vid=""
             ;;

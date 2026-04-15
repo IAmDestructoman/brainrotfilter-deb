@@ -55,6 +55,21 @@ extract_video_id() {
             _vid="${_vid%%#*}"
             _vid="${_vid%%/*}"
             ;;
+        *ytimg.com/vi_webp/*)
+            _vid="${_url#*ytimg.com/vi_webp/}"
+            _vid="${_vid%%/*}"
+            _vid="${_vid%%\?*}"
+            ;;
+        *ytimg.com/vi/*)
+            _vid="${_url#*ytimg.com/vi/}"
+            _vid="${_vid%%/*}"
+            _vid="${_vid%%\?*}"
+            ;;
+        *ytimg.com/sb/*)
+            _vid="${_url#*ytimg.com/sb/}"
+            _vid="${_vid%%/*}"
+            _vid="${_vid%%\?*}"
+            ;;
         *)
             _vid=""
             ;;

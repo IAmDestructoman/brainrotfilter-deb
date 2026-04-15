@@ -271,7 +271,7 @@ ssl_bump splice all
 
 # -- URL Rewriter --
 url_rewrite_program {SCRIPTS_DIR}/squid_redirector.sh
-url_rewrite_children 5 startup=2 idle=1 concurrency=0
+url_rewrite_children 5 startup=2 idle=1 concurrency=1
 url_rewrite_access allow youtube_domains
 url_rewrite_access deny all
 url_rewrite_bypass on
@@ -287,17 +287,12 @@ acl youtube_nocache dstdomain {' '.join(YOUTUBE_DOMAINS)}
 cache deny youtube_nocache
 no_cache deny youtube_nocache
 
-# -- Basic access rules --
-acl localnet src 10.0.0.0/8
-acl localnet src 172.16.0.0/12
-acl localnet src 192.168.0.0/16
-acl SSL_ports port 443
-acl Safe_ports port 80
-acl Safe_ports port 443
-
+# -- Access rules --
+# Allow traffic from any RFC 1918 / private range.
+# Note: main squid.conf defines 'localnet' already; we add a broader
+# catch-all so this snippet works even if inserted before deny all.
 http_access allow localnet
 http_access allow localhost
-http_access deny all
 """
 
         conf_path = CONFIG_DIR / "squid_brainrot.conf"

@@ -678,7 +678,7 @@ def _download_video_once(
 
     cmd = [
         "yt-dlp",
-        "--format", "worstvideo[ext=mp4]/worstvideo/worst[ext=mp4]/worst",
+        "--format", "worstvideo[ext=mp4]+worstaudio[ext=m4a]/worst[acodec!=none][height<=360]/worst[acodec!=none]/worst",
         "--download-sections", time_range,
         "--output", output_path,
         "--no-playlist",

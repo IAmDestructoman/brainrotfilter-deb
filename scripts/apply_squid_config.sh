@@ -44,8 +44,15 @@ INCLUDE_LINE="include $CONF_SNIPPET"
 if grep -qF "$CONF_SNIPPET" "$SQUID_CONF"; then
     log "Include directive already present in $SQUID_CONF — nothing to do."
 else
-    # Append the include directive
-    printf '\n# BrainrotFilter\n%s\n' "$INCLUDE_LINE" >> "$SQUID_CONF"
+    # Insert the include directive immediately before the first
+    # 'http_access deny all' line so our allow rules take effect before
+    # Squid's default catch-all deny.  Fall back to appending if that
+    # sentinel line is not found (non-standard squid.conf).
+    if grep -qE '^http_access deny all$' "$SQUID_CONF"; then
+        sed -i "0,/^http_access deny all$/{s|^http_access deny all$|# BrainrotFilter\n${INCLUDE_LINE}\n\nhttp_access deny all|}" "$SQUID_CONF"
+    else
+        printf '\n# BrainrotFilter\n%s\n' "$INCLUDE_LINE" >> "$SQUID_CONF"
+    fi
     log "Added '$INCLUDE_LINE' to $SQUID_CONF"
 fi
 
