@@ -247,6 +247,20 @@ analysis_queue = AnalysisQueue(
 )
 
 
+# Background thread: clean up expired iptables block rules every 30 s
+def _iptables_cleanup_loop() -> None:
+    while True:
+        time.sleep(30)
+        try:
+            from state_killer import cleanup_expired_blocks
+            cleanup_expired_blocks()
+        except Exception as exc:
+            logger.debug("iptables cleanup error: %s", exc)
+
+
+threading.Thread(target=_iptables_cleanup_loop, daemon=True, name="iptables-cleanup").start()
+
+
 # ---------------------------------------------------------------------------
 # Core analysis orchestrator
 # ---------------------------------------------------------------------------
