@@ -39,8 +39,11 @@ case "$1" in
         # Install polkit rule so the brainrotfilter service user can trigger
         # the privileged brainrotfilter-squid-apply.service without sudo.
         # (NoNewPrivileges=true in the main service unit blocks sudo entirely.)
+        # polkit is a package dependency; create rules.d if it doesn't exist yet
+        # (can happen when polkit is being configured in the same apt run).
+        mkdir -p /etc/polkit-1/rules.d
         install -m 0644 /usr/share/brainrotfilter/polkit/50-brainrotfilter.rules \
-            /etc/polkit-1/rules.d/50-brainrotfilter.rules 2>/dev/null || true
+            /etc/polkit-1/rules.d/50-brainrotfilter.rules
 
         # Make the privileged helper script executable
         chmod 0755 /usr/lib/brainrotfilter/scripts/apply_squid_config.sh 2>/dev/null || true

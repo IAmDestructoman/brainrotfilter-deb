@@ -483,10 +483,14 @@ http_access deny all
         """Install shell helper scripts to SCRIPTS_DIR."""
         SCRIPTS_DIR.mkdir(parents=True, exist_ok=True)
 
-        # Find scripts relative to package install location
-        pkg_scripts = Path(__file__).parent.parent.parent / "scripts"
+        # Find scripts — check installed locations in priority order:
+        #   1. SCRIPTS_DIR itself (dpkg already placed them there)
+        #   2. Alongside the source tree (dev/git checkout)
+        #   3. Legacy /usr/share location (not used by current packaging)
+        pkg_scripts = SCRIPTS_DIR
+        if not pkg_scripts.exists() or not any(pkg_scripts.iterdir()):
+            pkg_scripts = Path(__file__).parent.parent.parent / "scripts"
         if not pkg_scripts.exists():
-            # Try installed package location
             pkg_scripts = Path("/usr/share/brainrotfilter/scripts")
 
         installed = []
