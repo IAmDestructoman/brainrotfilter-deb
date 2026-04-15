@@ -151,9 +151,8 @@ while IFS= read -r line; do
     case "$url" in
         *youtube.com/watch*|*youtube.com/shorts/*|*youtube.com/embed/*|*youtu.be/*)
             is_playback=1; is_strong=1 ;;
-        *ytimg.com/sb/*)
-            is_playback=1; is_strong=1 ;;
-        *youtube.com/api/stats/watchtime*|*youtube.com/api/stats/qoe*|*youtube.com/api/stats/playback*)
+        *ytimg.com/sb/*|*youtube.com/api/stats/watchtime*|*youtube.com/api/stats/qoe*|*youtube.com/api/stats/playback*)
+            # Weak signals — fire during hover-preview; identify only.
             is_playback=1 ;;
     esac
 
