@@ -42,9 +42,10 @@ logger = logging.getLogger(__name__)
 SQUID_HTTP_PORT  = 3128
 SQUID_HTTPS_PORT = 3129
 
-# How long (seconds) the client is blocked from reconnecting after a kill
-# Set high enough to last for a full-length video (2 hours = 7200s)
-BLOCK_DURATION_SECONDS = 7200
+# How long (seconds) the client is blocked from reconnecting after a kill.
+# Short window: just enough to drain the pre-buffered MSE buffer; the
+# URL-level block ACL and block-page redirect prevent re-playback afterwards.
+BLOCK_DURATION_SECONDS = 30
 
 # Active iptables block rules: {client_ip: monotonic expiry time}
 _active_blocks: Dict[str, float] = {}
