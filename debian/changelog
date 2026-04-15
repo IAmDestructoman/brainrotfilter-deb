@@ -1,3 +1,38 @@
+brainrotfilter (1.0.2-1) unstable; urgency=medium
+
+  * Block enforcement: per-client CDN deny holds while a blocked video's
+    URLs are still being requested (90s TTL refreshed by stats URLs);
+    plus URL-level ACL denial of watch/stats URLs for blocked videos.
+  * Defensive CDN fallback (Option B): client_ip without a recent
+    /api/check identification gets googlevideo.com denied. Heartbeat
+    keeps active sessions warm even when telemetry URLs lack docid.
+  * Squid pre-filter: url_regex gates external helpers so home-page
+    scrolling no longer floods them; helper pools bumped to 20 children
+    with 3-5 startup; CDN helper keyed on %SRC only with 3s TTL.
+  * Strong/weak signal split: only navigation URLs (watch/shorts/embed/
+    youtu.be) queue analysis. Storyboards and stats URLs identify the
+    client but never queue, so feed scrolling can't fill Processing.
+  * Pre-emptive CDN blocking via brainrot_cdn_pending external_acl_type
+    and squid_cdn_block_helper.sh.
+  * iptables block via state_killer reduced to 30s (was 7200s); used
+    only for the immediate RST window. Sustained blocking is handled by
+    the per-client CDN deny instead.
+  * /api/check endpoint records identify for any client_ip even without
+    a video_id (covers heartbeats and channel-only checks).
+  * Added /api/client-pending endpoint used by the CDN helper.
+  * Block/warning page templates now receive flat variables (video_title,
+    combined_score, scores, matched_keywords) instead of a nested dict
+    that the template couldn't unpack.
+  * Videos API: added 'limit' alias for per_page; raised cap to 2000;
+    default sort now analyzed_at DESC.
+  * app.js: relativeTime/formatDate append 'Z' to naive UTC timestamps
+    so the dashboard shows correct local times.
+  * Removed global googlevideo.com delay_pool — allowed videos now play
+    at full native quality; throttling no longer needed because pre-
+    emptive CDN deny handles unanalyzed-video pre-buffering.
+
+ -- IAmDestructoman <121320244+IAmDestructoman@users.noreply.github.com>  Wed, 15 Apr 2026 19:45:00 +0000
+
 brainrotfilter (1.0.1-1) unstable; urgency=medium
 
   * Fix wizard permission error writing /etc/squid/squid.conf
