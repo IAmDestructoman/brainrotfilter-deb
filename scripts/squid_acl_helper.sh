@@ -132,17 +132,21 @@ while IFS= read -r line; do
         src_ip=""
     fi
 
-    # Only ACTIVE-playback signals deny.  Anything else — thumbnails, qoe
-    # telemetry, timedtext, preview metadata — passes through without even
-    # calling the API.  This keeps home-page rendering fast and avoids
-    # false denials.
+    # Two classes of URL reach us (after Squid's url_regex pre-filter):
+    #   STRONG = user actually navigated to this video (watch URL / storyboard).
+    #           safe to queue for analysis.
+    #   WEAK   = telemetry that might fire for hover-preview feed cards too
+    #           (qoe/watchtime/playback stats). Identify the client (so
+    #           their CDN stays allowed) but do NOT queue, or the feed
+    #           scroll would flood the analysis queue.
     is_playback=0
+    is_strong=0
     case "$url" in
         *youtube.com/watch*|*youtube.com/shorts/*|*youtube.com/embed/*|*youtu.be/*)
-            is_playback=1 ;;
-        *youtube.com/api/stats/watchtime*|*youtube.com/api/stats/qoe*|*youtube.com/api/stats/playback*)
-            is_playback=1 ;;
+            is_playback=1; is_strong=1 ;;
         *ytimg.com/sb/*)
+            is_playback=1; is_strong=1 ;;
+        *youtube.com/api/stats/watchtime*|*youtube.com/api/stats/qoe*|*youtube.com/api/stats/playback*)
             is_playback=1 ;;
     esac
 
@@ -192,10 +196,11 @@ while IFS= read -r line; do
     action=$(json_field "action" "$response")
     reason=$(json_field "reason" "$response")
 
-    # Unknown video -> queue for background analysis (fire-and-forget).
-    # This mirrors what the url_rewrite helper would do, but works even
-    # when url_rewrite_access/bypass silently skips the rewriter.
-    if [ "$reason" = "not_blocked" ] && [ -n "$video_id" ]; then
+    # Only queue for analysis on STRONG signals (navigation, not telemetry).
+    # Telemetry URLs refresh identify but do not queue, so scrolling the
+    # home feed (where hover-preview cards fire qoe/watchtime too) no
+    # longer floods the analysis queue.
+    if [ "$is_strong" = "1" ] && [ "$reason" = "not_blocked" ] && [ -n "$video_id" ]; then
         curl -s --max-time "$CURL_TIMEOUT" \
             -X POST "${BRAINROT_API}/api/analyze" \
             -H "Content-Type: application/json" \
