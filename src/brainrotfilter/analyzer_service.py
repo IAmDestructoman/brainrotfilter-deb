@@ -273,22 +273,30 @@ _last_identify: Dict[str, float] = {}
 _identify_lock = threading.Lock()
 IDENTIFY_STALE_SECONDS = 45  # window considered "recent"
 
-# Clients whose CDN should be denied because they recently hit a blocked
-# video. This enforces the block on googlevideo.com chunks (which don't
-# carry a video_id we can parse). client_ip -> expiry monotonic time.
-_cdn_blocked_clients: Dict[str, float] = {}
+# Per-client set of recently-requested BLOCKED video_ids.  A client is
+# CDN-blocked while any of these entries are still fresh.  Entries are
+# refreshed every time the blocked video is re-identified (stats URLs
+# fire ~every 30s during playback) and expire naturally once the client
+# stops requesting that video's URLs.  Ads / sidebar thumbnails of
+# allowed videos do NOT remove the entries, so mid-block ad breaks no
+# longer accidentally unblock the player.
+_cdn_blocked_clients: Dict[str, Dict[str, float]] = {}  # ip -> {video_id: expiry}
 _cdn_block_lock = threading.Lock()
-CDN_BLOCK_DURATION_SECONDS = 3600  # 1 hour
+CDN_BLOCK_ENTRY_TTL = 90  # seconds — must be > stats URL interval (~30s)
 
 
-def _block_client_cdn(client_ip: str, duration: int = CDN_BLOCK_DURATION_SECONDS) -> None:
+def _block_client_cdn(client_ip: str, video_id: str = "", duration: int = CDN_BLOCK_ENTRY_TTL) -> None:
     if not client_ip or client_ip in ("-", "unknown", "localhost"):
         return
+    # Use a synthetic key when called without a specific video_id (e.g. from
+    # the analysis completion hook with no recent client context).
+    key = video_id or "__generic__"
     with _cdn_block_lock:
-        _cdn_blocked_clients[client_ip] = time.monotonic() + duration
+        _cdn_blocked_clients.setdefault(client_ip, {})[key] = time.monotonic() + duration
 
 
 def _unblock_client_cdn(client_ip: str) -> None:
+    """Remove ALL CDN block entries for a client (explicit override)."""
     with _cdn_block_lock:
         _cdn_blocked_clients.pop(client_ip, None)
 
@@ -298,10 +306,14 @@ def _is_client_cdn_blocked(client_ip: str) -> bool:
         return False
     now = time.monotonic()
     with _cdn_block_lock:
-        exp = _cdn_blocked_clients.get(client_ip)
-        if exp is None:
+        entries = _cdn_blocked_clients.get(client_ip)
+        if not entries:
             return False
-        if now >= exp:
+        # Drop expired entries
+        expired = [vid for vid, exp in entries.items() if now >= exp]
+        for vid in expired:
+            entries.pop(vid, None)
+        if not entries:
             _cdn_blocked_clients.pop(client_ip, None)
             return False
         return True
@@ -549,7 +561,7 @@ def _run_analysis(video_id: str) -> None:
                 # Sustained CDN deny — stops the player from refilling the
                 # buffer after the brief iptables RST window expires.
                 if status_str == "block":
-                    _block_client_cdn(cip)
+                    _block_client_cdn(cip, video_id=video_id)
         except Exception as exc:
             logger.error("State kill after flagging failed for %s: %s", video_id, exc)
 
@@ -838,7 +850,7 @@ async def api_check(req: CheckRequest) -> CheckResponse:
         _record_identify(req.client_ip or "")
         if db.is_whitelisted(vid, "video"):
             _log_client(video_id=vid, action="allow")
-            # Whitelisted video -> clear any CDN block so playback can resume
+            # Explicit whitelist is an admin override -> clear any CDN block
             if req.client_ip:
                 _unblock_client_cdn(req.client_ip)
             return CheckResponse(action="allow", video_id=vid, reason="whitelisted")
@@ -846,10 +858,10 @@ async def api_check(req: CheckRequest) -> CheckResponse:
         status = db.get_video_status(vid)
         if status == "block":
             _log_client(video_id=vid, action="block")
-            # Sustained per-client CDN deny so the player can't keep streaming
-            # googlevideo.com chunks after the URL-level ACL denial.
+            # Refresh this client's block entry for this video_id; entries
+            # auto-expire when the blocked video stops being identified.
             if req.client_ip:
-                _block_client_cdn(req.client_ip)
+                _block_client_cdn(req.client_ip, video_id=vid)
             return CheckResponse(
                 action="block",
                 video_id=vid,
@@ -889,11 +901,10 @@ async def api_check(req: CheckRequest) -> CheckResponse:
                 reason="channel_soft_blocked",
             )
 
-    # Video/channel not blocked — clear any stale CDN block so the client
-    # can stream the new (non-blocked) video after having previously hit a
-    # blocked one.
-    if req.client_ip:
-        _unblock_client_cdn(req.client_ip)
+    # Video/channel not blocked.  We deliberately do NOT unblock the CDN
+    # here: the new per-video TTL entries expire on their own when the
+    # blocked video stops being requested, and an ad or sidebar thumbnail
+    # of an allowed video should not reset that timer.
     return CheckResponse(action="allow", reason="not_blocked")
 
 
