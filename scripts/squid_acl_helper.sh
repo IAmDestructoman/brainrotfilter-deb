@@ -132,14 +132,6 @@ while IFS= read -r line; do
         src_ip=""
     fi
 
-    video_id=$(extract_video_id "$url")
-
-    # Non-YouTube URL -- allow
-    if [ -z "$video_id" ]; then
-        echo "ERR"
-        continue
-    fi
-
     # Only ACTIVE-playback signals deny.  Anything else — thumbnails, qoe
     # telemetry, timedtext, preview metadata — passes through without even
     # calling the API.  This keeps home-page rendering fast and avoids
@@ -156,6 +148,23 @@ while IFS= read -r line; do
 
     # Non-playback URL — short-circuit before any API call.
     if [ "$is_playback" = "0" ]; then
+        echo "ERR"
+        continue
+    fi
+
+    video_id=$(extract_video_id "$url")
+
+    # No extractable video_id (e.g. session-level qoe without docid) —
+    # fire a lightweight heartbeat so the defensive-CDN-deny knows the
+    # session is still live, then allow.
+    if [ -z "$video_id" ]; then
+        if [ -n "$src_ip" ]; then
+            curl -s --max-time "$CURL_TIMEOUT" \
+                -X POST "${BRAINROT_API}/api/check" \
+                -H "Content-Type: application/json" \
+                -d "{\"client_ip\":\"${src_ip}\"}" \
+                >/dev/null 2>&1 &
+        fi
         echo "ERR"
         continue
     fi

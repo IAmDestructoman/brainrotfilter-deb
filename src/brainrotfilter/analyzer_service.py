@@ -847,11 +847,15 @@ async def api_check(req: CheckRequest) -> CheckResponse:
         except Exception:
             pass
 
+    # Any /api/check call from a real client counts as "live" traffic for
+    # the defensive CDN fallback — the client is actively using YouTube,
+    # we just may not always have a video_id to go with it (session-level
+    # telemetry without docid, non-playback URLs, etc.). Refreshing here
+    # prevents an active session from sliding into no_identify state.
+    _record_identify(req.client_ip or "")
+
     if req.video_id:
         vid = req.video_id.strip()
-        # Record that we got a valid identification for this client so the
-        # defensive CDN fallback knows the client is "live" (not dark).
-        _record_identify(req.client_ip or "")
         if db.is_whitelisted(vid, "video"):
             _log_client(video_id=vid, action="allow")
             # Explicit whitelist is an admin override -> clear any CDN block
