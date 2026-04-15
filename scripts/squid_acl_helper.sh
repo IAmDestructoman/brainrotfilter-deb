@@ -143,13 +143,15 @@ while IFS= read -r line; do
     is_strong=0
     case "$url" in
         *youtube.com/watch*|*youtube.com/shorts/*|*youtube.com/embed/*|*youtu.be/*)
-            # True navigation — user opened the video page.
             is_playback=1; is_strong=1 ;;
-        *ytimg.com/sb/*|*youtube.com/api/stats/watchtime*|*youtube.com/api/stats/qoe*|*youtube.com/api/stats/playback*)
-            # Weak signals — storyboards fire on hover-preview; stats
-            # URLs fire for hover-preview autoplay cards. Identify the
-            # client (keeps CDN live for allowed content) but do not
-            # queue analysis.
+        *ytimg.com/sb/*)
+            # Storyboards fire on actual playback opens AND on home-feed
+            # hover-preview. Treat as strong: hover-only previews queue
+            # extra rows in Processing but that's better than missing
+            # autoplay videos whose watch URL is cached.
+            is_playback=1; is_strong=1 ;;
+        *youtube.com/api/stats/watchtime*|*youtube.com/api/stats/qoe*|*youtube.com/api/stats/playback*)
+            # Telemetry — identify only.
             is_playback=1 ;;
     esac
 
