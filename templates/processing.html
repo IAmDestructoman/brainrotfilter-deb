@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block title %}Now Processing{% endblock %}
+{% block page_title %}Now Processing{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Now Processing</h1>
+    <div class="subtitle">Live analysis queue</div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <span id="queue-badge" class="text-dim" style="font-size:0.8rem"></span>
+    <button id="btn-refresh" class="btn btn-secondary">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+      </svg>
+      Refresh
+    </button>
+  </div>
+</div>
+
+<!-- In-progress jobs -->
+<div class="card" style="margin-bottom:24px">
+  <div class="card-header">
+    <span class="card-title">
+      <span id="spinner-hdr" class="spinner" style="width:14px;height:14px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:6px;display:none"></span>
+      In Progress
+    </span>
+    <span id="in-progress-count" class="text-dim" style="font-size:0.8rem">0 jobs</span>
+  </div>
+  <div id="in-progress-list" style="padding:4px 0">
+    <div class="text-center text-dim" style="padding:32px">Nothing is being analysed right now.</div>
+  </div>
+</div>
+
+<!-- Queued (waiting) -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Queue</span>
+    <span id="queued-count" class="text-dim" style="font-size:0.8rem">0 waiting</span>
+  </div>
+  <div id="queue-list" style="padding:4px 0">
+    <div class="text-center text-dim" style="padding:32px">Queue is empty.</div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const STEP_LABELS = {
+  starting:  'Starting…',
+  metadata:  'Fetching metadata',
+  keywords:  'Keyword analysis',
+  scene:     'Scene analysis',
+  audio:     'Audio analysis',
+  scoring:   'Scoring',
+};
+const STEP_ORDER = ['starting','metadata','keywords','scene','audio','scoring'];
+
+function stepProgress(step) {
+  const idx = STEP_ORDER.indexOf(step);
+  return idx < 0 ? 0 : Math.round(((idx + 1) / STEP_ORDER.length) * 100);
+}
+
+function fmtElapsed(s) {
+  if (s < 60) return s + 's';
+  return Math.floor(s / 60) + 'm ' + (s % 60) + 's';
+}
+
+function renderInProgress(jobs) {
+  const el = document.getElementById('in-progress-list');
+  const hdr = document.getElementById('spinner-hdr');
+  const cnt = document.getElementById('in-progress-count');
+
+  cnt.textContent = jobs.length + (jobs.length === 1 ? ' job' : ' jobs');
+  hdr.style.display = jobs.length ? 'inline-block' : 'none';
+
+  if (!jobs.length) {
+    el.innerHTML = '<div class="text-center text-dim" style="padding:32px">Nothing is being analysed right now.</div>';
+    return;
+  }
+
+  el.innerHTML = jobs.map(job => {
+    const pct = stepProgress(job.step);
+    const label = STEP_LABELS[job.step] || job.step;
+    const title = job.title || job.video_id;
+    const elapsed = fmtElapsed(job.elapsed_s || 0);
+    return `
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <div>
+            <span style="font-weight:500">${title}</span>
+            <span class="text-dim" style="font-size:0.75rem;margin-left:8px">${job.video_id}</span>
+          </div>
+          <span class="text-dim" style="font-size:0.75rem">${elapsed}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="flex:1;height:6px;background:var(--bg-card-hover);border-radius:3px;overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:var(--accent);border-radius:3px;transition:width 0.4s"></div>
+          </div>
+          <span class="text-dim" style="font-size:0.75rem;white-space:nowrap">${label}</span>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function renderQueue(size) {
+  const el = document.getElementById('queue-list');
+  const cnt = document.getElementById('queued-count');
+  cnt.textContent = size + ' waiting';
+  if (size === 0) {
+    el.innerHTML = '<div class="text-center text-dim" style="padding:32px">Queue is empty.</div>';
+  } else {
+    el.innerHTML = `<div class="text-center text-dim" style="padding:32px">${size} video${size !== 1 ? 's' : ''} queued for analysis.</div>`;
+  }
+}
+
+let _pollTimer = null;
+
+async function poll() {
+  try {
+    const data = await fetch('/api/analysis/status').then(r => r.json());
+    renderInProgress(data.in_progress || []);
+    renderQueue(data.queue_size || 0);
+
+    const badge = document.getElementById('queue-badge');
+    const total = (data.in_progress || []).length + (data.queue_size || 0);
+    badge.textContent = total ? total + ' active' : 'idle';
+
+    const delay = (data.in_progress || []).length > 0 ? 1500 : 5000;
+    _pollTimer = setTimeout(poll, delay);
+  } catch (e) {
+    _pollTimer = setTimeout(poll, 5000);
+  }
+}
+
+document.getElementById('btn-refresh').addEventListener('click', () => {
+  clearTimeout(_pollTimer);
+  poll();
+});
+
+poll();
+</script>
+{% endblock %}

@@ -1,17 +1,27 @@
 """
 state_killer.py - Linux connection tracking manipulation.
 
-Kills active TCP/UDP connections for a client IP that is currently streaming
-a YouTube/Google Video CDN connection, forcing the video to stop immediately
-after a block decision has been made mid-stream.
+Kills active TCP connections between a client and the Squid proxy when a
+video has been flagged mid-stream.  In a transparent proxy setup, the client
+never connects directly to YouTube CDN — Squid proxies all traffic.  The
+correct kill target is therefore the client → proxy tunnel, NOT the proxy →
+CDN connection.
 
-Uses conntrack (netfilter connection tracking) for connection state management.
+Strategy
+--------
+1. Find ESTABLISHED TCP conntrack entries where:
+   - source IP  == client IP (the LAN device streaming YouTube)
+   - destination port ∈ {SQUID_HTTP_PORT, SQUID_HTTPS_PORT}
+2. Delete those entries via ``conntrack -D``.
+3. This sends a TCP RST to both sides, forcing the browser/app to reconnect.
+4. On reconnect, the blocked-video URL hits the Squid external ACL again and
+   is denied — stream terminated.
 
 Safety constraints:
-  - Only kills connections where the DESTINATION is a known YouTube/Google CDN IP range
-  - Never kills LAN-to-LAN connections
+  - Only kills TCP connections on the known Squid intercept ports
+  - Never touches SSH (22), DNS (53), or unrelated LAN traffic
   - Logs every kill action for audit purposes
-  - Requires root (or CAP_NET_ADMIN) to run conntrack
+  - Requires CAP_NET_ADMIN (granted via AmbientCapabilities in the service unit)
 """
 
 from __future__ import annotations
@@ -19,53 +29,13 @@ from __future__ import annotations
 import logging
 import re
 import subprocess
-from typing import List, Optional, Set, Tuple
+from typing import List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-# Known YouTube/Google CDN destination patterns (CIDR prefixes)
-_GOOGLE_CDN_PREFIXES = [
-    "142.250.",
-    "172.217.",
-    "216.58.",
-    "74.125.",
-    "64.233.",
-    "209.85.",
-    "173.194.",
-    "108.177.",
-    "35.190.",
-    "34.64.",
-    "34.96.",
-    "34.104.",
-    "34.128.",
-    "35.186.",
-    "35.191.",
-    "35.234.",
-    "35.235.",
-    "23.236.",
-    "23.251.",
-    "130.211.",
-]
-
-
-def _is_youtube_cdn_ip(ip: str) -> bool:
-    """Return True if *ip* belongs to a known YouTube/Google CDN range."""
-    for prefix in _GOOGLE_CDN_PREFIXES:
-        if ip.startswith(prefix):
-            return True
-    return False
-
-
-def _is_private_ip(ip: str) -> bool:
-    """Return True if *ip* is in a private (RFC 1918) range."""
-    return (
-        ip.startswith("10.")
-        or ip.startswith("192.168.")
-        or ip.startswith("172.16.")
-        or ip.startswith("172.17.")
-        or ip.startswith("172.31.")
-        or ip.startswith("127.")
-    )
+# Squid intercept ports — match linux_configurator.py defaults
+SQUID_HTTP_PORT = 3128
+SQUID_HTTPS_PORT = 3129
 
 
 def _run_conntrack(args: List[str], timeout: int = 10) -> Tuple[int, str, str]:
@@ -91,43 +61,37 @@ def _run_conntrack(args: List[str], timeout: int = 10) -> Tuple[int, str, str]:
         return -1, "", str(exc)
 
 
-def _list_connections(client_ip: str) -> List[Tuple[str, str]]:
+def _list_proxy_connections(client_ip: str) -> List[Tuple[str, int]]:
     """
-    List all connections from *client_ip* to YouTube/Google CDN IPs.
+    List ESTABLISHED TCP connections from *client_ip* to the Squid proxy ports.
 
-    Returns list of (src_ip, dst_ip) pairs.
+    In conntrack, a transparent-proxy entry looks like:
+        tcp 6 431999 ESTABLISHED src=CLIENT dst=PROXY sport=CLIENT_PORT dport=3129 ...
+
+    Returns list of (client_ip, client_port) tuples representing active
+    Squid tunnels.
     """
     rc, stdout, stderr = _run_conntrack(["-L", "-s", client_ip, "-p", "tcp"])
     if rc != 0:
         logger.warning("conntrack -L returned %d: %s", rc, stderr[:200])
         return []
 
-    pairs: List[Tuple[str, str]] = []
-    seen: Set[Tuple[str, str]] = set()
-
-    # Parse conntrack output lines:
-    # tcp  6 300 ESTABLISHED src=192.168.1.5 dst=142.250.80.46 sport=54321 dport=443 ...
-    dst_pattern = re.compile(r"dst=([\d.]+)")
-
+    tunnels: List[Tuple[str, int]] = []
+    # Pattern: src=CLIENT dst=PROXY sport=CLIENT_PORT dport=SQUID_PORT
+    pat = re.compile(
+        r"src=([\d.]+)\s+dst=[\d.]+\s+sport=(\d+)\s+dport=(\d+)"
+    )
     for line in stdout.splitlines():
-        if not line.strip():
+        if "ESTABLISHED" not in line and "SYN_SENT" not in line:
             continue
-        m = dst_pattern.search(line)
+        m = pat.search(line)
         if not m:
             continue
-        dst_ip = m.group(1)
+        src_ip, sport, dport = m.group(1), int(m.group(2)), int(m.group(3))
+        if src_ip == client_ip and dport in (SQUID_HTTP_PORT, SQUID_HTTPS_PORT):
+            tunnels.append((client_ip, sport))
 
-        if not _is_youtube_cdn_ip(dst_ip):
-            continue
-        if _is_private_ip(dst_ip):
-            continue
-
-        pair = (client_ip, dst_ip)
-        if pair not in seen:
-            seen.add(pair)
-            pairs.append(pair)
-
-    return pairs
+    return tunnels
 
 
 def kill_states_for_video(
@@ -135,56 +99,54 @@ def kill_states_for_video(
     video_id: Optional[str] = None,
 ) -> Tuple[bool, int]:
     """
-    Kill Linux conntrack entries for *client_ip* to YouTube CDN connections.
+    Terminate active Squid proxy tunnels for *client_ip*.
 
-    This is called after a video has been flagged mid-stream to immediately
-    terminate the ongoing video stream.
+    Finds all ESTABLISHED TCP connections from *client_ip* to the Squid
+    intercept ports and deletes them from conntrack, triggering a TCP RST.
+    The browser/app must reconnect, at which point the blocked URL is caught
+    by the Squid external ACL.
 
     Args:
-        client_ip:  The LAN IP address of the client currently streaming
-        video_id:   Optional video ID (for audit log only)
+        client_ip:  LAN IP of the client currently streaming
+        video_id:   Optional video ID (audit log only)
 
     Returns:
         (success, connections_killed_count)
     """
-    if not client_ip:
-        logger.warning("kill_states_for_video called with empty client_ip")
+    if not client_ip or client_ip in ("-", "unknown"):
+        logger.warning("kill_states_for_video called with invalid client_ip=%r", client_ip)
         return False, 0
 
-    # Find YouTube connections for this client
-    youtube_pairs = _list_connections(client_ip)
+    tunnels = _list_proxy_connections(client_ip)
 
-    if not youtube_pairs:
+    if not tunnels:
         logger.info(
-            "No YouTube connections found for client %s (video_id=%s).",
-            client_ip,
-            video_id or "N/A",
+            "No active Squid tunnels found for client %s (video=%s).",
+            client_ip, video_id or "N/A",
         )
         return True, 0
 
-    # Kill each connection
     killed = 0
-    for src_ip, dst_ip in youtube_pairs:
+    for src_ip, sport in tunnels:
         logger.info(
-            "Killing connection: %s -> %s (client=%s, video=%s)",
-            src_ip, dst_ip, client_ip, video_id or "N/A",
+            "Killing proxy tunnel: %s:%d -> Squid (client=%s, video=%s)",
+            src_ip, sport, client_ip, video_id or "N/A",
         )
-        rc, stdout, stderr = _run_conntrack([
-            "-D", "-s", src_ip, "-d", dst_ip, "-p", "tcp",
+        rc, _, stderr = _run_conntrack([
+            "-D", "-s", src_ip, "-p", "tcp", "--sport", str(sport),
         ])
         if rc == 0:
             killed += 1
         else:
             logger.warning(
-                "conntrack -D returned %d for %s -> %s: %s",
-                rc, src_ip, dst_ip, stderr[:200],
+                "conntrack -D failed for %s:%d: %s", src_ip, sport, stderr[:200]
             )
 
     logger.info(
-        "Connection kill complete: %d/%d pairs killed for client %s.",
-        killed, len(youtube_pairs), client_ip,
+        "State kill complete: %d/%d tunnels killed for client %s (video=%s).",
+        killed, len(tunnels), client_ip, video_id or "N/A",
     )
-    return killed > 0 or len(youtube_pairs) == 0, killed
+    return killed > 0 or len(tunnels) == 0, killed
 
 
 def kill_states_for_channel(
@@ -200,6 +162,6 @@ def kill_states_for_channel(
 
 
 def is_conntrack_available() -> bool:
-    """Return True if conntrack is available on this system."""
+    """Return True if conntrack is usable on this system."""
     rc, _, _ = _run_conntrack(["-C"], timeout=3)
     return rc == 0

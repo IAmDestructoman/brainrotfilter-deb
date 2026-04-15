@@ -636,7 +636,7 @@ async def api_check(req: CheckRequest) -> CheckResponse:
 
     def _log_client(video_id: str = "", channel_id: str = "", action: str = "allow") -> None:
         """Log the requesting client IP so the state killer can find active viewers."""
-        if not req.client_ip:
+        if not req.client_ip or req.client_ip in ("-", "unknown", "localhost"):
             return
         try:
             from models import RequestLog, ActionTaken
@@ -1149,6 +1149,12 @@ async def admin_ml(request: Request):
 async def admin_community(request: Request):
     """Admin page for community keyword synchronisation."""
     return _template_response(request, "community.html", {"active_page": "community"})
+
+
+@app.get("/processing", response_class=HTMLResponse)
+async def admin_processing(request: Request):
+    """Admin page showing the live analysis queue and in-progress jobs."""
+    return _template_response(request, "processing.html", {"active_page": "processing"})
 
 
 # ---------------------------------------------------------------------------
