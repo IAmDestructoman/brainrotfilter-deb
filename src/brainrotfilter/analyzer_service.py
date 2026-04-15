@@ -266,6 +266,13 @@ _pending_clients: Dict[str, Dict[str, float]] = {}   # client_ip -> {video_id: e
 _pending_lock = threading.Lock()
 PENDING_TIMEOUT_SECONDS = 180  # hard cap in case analysis is lost
 
+# Defensive fallback: track last time we successfully identified a video_id
+# for a client.  If a client makes CDN requests but has no recent identify,
+# deny the CDN so the player stalls and triggers a fresh page/thumbnail load.
+_last_identify: Dict[str, float] = {}
+_identify_lock = threading.Lock()
+IDENTIFY_STALE_SECONDS = 45  # window considered "recent"
+
 
 def _mark_client_pending(client_ip: str, video_id: str) -> None:
     if not client_ip or client_ip in ("-", "unknown", "localhost"):
@@ -300,6 +307,31 @@ def _is_client_pending(client_ip: str) -> bool:
             _pending_clients.pop(client_ip, None)
             return False
         return True
+
+
+def _record_identify(client_ip: str) -> None:
+    """Record that we just identified a video_id for *client_ip* via api/check."""
+    if not client_ip or client_ip in ("-", "unknown", "localhost"):
+        return
+    with _identify_lock:
+        _last_identify[client_ip] = time.monotonic()
+
+
+def _client_identify_stale(client_ip: str) -> bool:
+    """Return True if client has NO recent video_id identification.
+
+    Used by the CDN helper: if a client is streaming googlevideo.com but we
+    cannot tell which video (cached thumbnails, stats URLs bypassing the VM),
+    deny the CDN so the player stalls.  That forces a page reload which in
+    turn re-requests identifying URLs through Squid.
+    """
+    if not client_ip or client_ip in ("-", "unknown", "localhost"):
+        return False
+    with _identify_lock:
+        ts = _last_identify.get(client_ip)
+    if ts is None:
+        return True
+    return (time.monotonic() - ts) > IDENTIFY_STALE_SECONDS
 
 
 # Background thread: clean up expired iptables block rules every 30 s
@@ -653,13 +685,22 @@ async def api_analyze(req: AnalyzeRequest) -> AnalyzeResponse:
 
 @app.get("/api/client-pending")
 async def api_client_pending(ip: str = Query(...)) -> Dict[str, Any]:
-    """Return whether *ip* has any unanalyzed videos in flight.
+    """Return whether *ip* should have its CDN requests denied.
 
-    Called by the Squid CDN helper for every googlevideo.com request; while
-    a client has pending analyses their CDN requests are denied so no video
-    data can be pre-buffered before the verdict.
+    Returns pending=true if either:
+      (a) client has at least one video awaiting analysis, or
+      (b) client has made NO video_id identification in the last
+          IDENTIFY_STALE_SECONDS — i.e. we can't tell what they're watching.
+    Case (b) catches cached-thumbnail / DNS-bypass situations where video
+    chunks stream through but no identifying URL reaches Squid.
     """
-    return {"pending": _is_client_pending(ip), "client_ip": ip}
+    pending = _is_client_pending(ip)
+    stale = _client_identify_stale(ip)
+    return {
+        "pending": pending or stale,
+        "reason": "analyzing" if pending else ("no_identify" if stale else "ok"),
+        "client_ip": ip,
+    }
 
 
 @app.get("/api/analysis/status")
@@ -747,6 +788,9 @@ async def api_check(req: CheckRequest) -> CheckResponse:
 
     if req.video_id:
         vid = req.video_id.strip()
+        # Record that we got a valid identification for this client so the
+        # defensive CDN fallback knows the client is "live" (not dark).
+        _record_identify(req.client_ip or "")
         if db.is_whitelisted(vid, "video"):
             _log_client(video_id=vid, action="allow")
             return CheckResponse(action="allow", video_id=vid, reason="whitelisted")
