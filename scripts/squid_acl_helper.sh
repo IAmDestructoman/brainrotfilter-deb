@@ -190,6 +190,18 @@ while IFS= read -r line; do
     fi
 
     action=$(json_field "action" "$response")
+    reason=$(json_field "reason" "$response")
+
+    # Unknown video -> queue for background analysis (fire-and-forget).
+    # This mirrors what the url_rewrite helper would do, but works even
+    # when url_rewrite_access/bypass silently skips the rewriter.
+    if [ "$reason" = "not_blocked" ] && [ -n "$video_id" ]; then
+        curl -s --max-time "$CURL_TIMEOUT" \
+            -X POST "${BRAINROT_API}/api/analyze" \
+            -H "Content-Type: application/json" \
+            -d "{\"video_id\":\"${video_id}\",\"client_ip\":\"${src_ip}\"}" \
+            >/dev/null 2>&1 &
+    fi
 
     case "$action" in
         block)
