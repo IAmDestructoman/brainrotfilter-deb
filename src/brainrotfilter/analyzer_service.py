@@ -838,6 +838,9 @@ async def api_check(req: CheckRequest) -> CheckResponse:
         _record_identify(req.client_ip or "")
         if db.is_whitelisted(vid, "video"):
             _log_client(video_id=vid, action="allow")
+            # Whitelisted video -> clear any CDN block so playback can resume
+            if req.client_ip:
+                _unblock_client_cdn(req.client_ip)
             return CheckResponse(action="allow", video_id=vid, reason="whitelisted")
 
         status = db.get_video_status(vid)
@@ -886,6 +889,11 @@ async def api_check(req: CheckRequest) -> CheckResponse:
                 reason="channel_soft_blocked",
             )
 
+    # Video/channel not blocked — clear any stale CDN block so the client
+    # can stream the new (non-blocked) video after having previously hit a
+    # blocked one.
+    if req.client_ip:
+        _unblock_client_cdn(req.client_ip)
     return CheckResponse(action="allow", reason="not_blocked")
 
 
