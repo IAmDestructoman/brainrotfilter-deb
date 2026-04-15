@@ -140,6 +140,28 @@ while IFS= read -r line; do
         continue
     fi
 
+    # Determine if this URL is a "playback trigger" (the one the user is about
+    # to watch) or a passive reference like a UI thumbnail. Only deny playback
+    # triggers; denying thumbnails breaks the home page / sidebar layout and
+    # exposes no content to the user.
+    is_playback=0
+    case "$url" in
+        *youtube.com/watch*|*youtube.com/shorts/*|*youtube.com/embed/*|*youtu.be/*)
+            is_playback=1 ;;
+        *youtube.com/api/stats/watchtime*|*youtube.com/api/stats/qoe*|*youtube.com/api/stats/playback*)
+            is_playback=1 ;;
+        *youtube.com/api/timedtext*)
+            is_playback=1 ;;
+        *youtubei/v1/player*|*youtubei/v1/next*)
+            is_playback=1 ;;
+        *ytimg.com/sb/*)
+            # Storyboards: loaded during playback (scrub preview) — deny.
+            is_playback=1 ;;
+        *ytimg.com/vi/*|*ytimg.com/vi_webp/*)
+            # Passive thumbnails in UI — never deny.
+            is_playback=0 ;;
+    esac
+
     # Build JSON body — include client_ip when available
     if [ -n "$src_ip" ]; then
         json_body="{\"video_id\":\"${video_id}\",\"client_ip\":\"${src_ip}\"}"
@@ -164,7 +186,7 @@ while IFS= read -r line; do
 
     case "$action" in
         block)
-            if [ "$FILTER_MODE" = "block" ] || [ "$FILTER_MODE" = "both" ]; then
+            if [ "$is_playback" = "1" ] && { [ "$FILTER_MODE" = "block" ] || [ "$FILTER_MODE" = "both" ]; }; then
                 log "hard-blocked ${video_id}"
                 echo "OK"
             else
@@ -172,7 +194,7 @@ while IFS= read -r line; do
             fi
             ;;
         soft_block)
-            if [ "$FILTER_MODE" = "soft_block" ] || [ "$FILTER_MODE" = "both" ]; then
+            if [ "$is_playback" = "1" ] && { [ "$FILTER_MODE" = "soft_block" ] || [ "$FILTER_MODE" = "both" ]; }; then
                 log "soft-blocked ${video_id}"
                 echo "OK"
             else
