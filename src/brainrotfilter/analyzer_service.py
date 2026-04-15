@@ -33,6 +33,7 @@ API Routes:
 
 from __future__ import annotations
 
+import json
 import logging
 import math
 import os
@@ -771,7 +772,7 @@ async def api_videos(
     search: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
-    order_by: str = Query("updated_at"),
+    order_by: str = Query("analyzed_at"),
     order_dir: str = Query("DESC"),
 ) -> Dict[str, Any]:
     """List analyzed videos with optional filtering and pagination."""
@@ -1182,19 +1183,28 @@ async def block_page(
     video_id: Optional[str] = Query(None),
     channel_id: Optional[str] = Query(None),
     reason: Optional[str] = Query(None),
+    client_ip: Optional[str] = Query(None),
 ):
     """Block page shown when Squid redirects a blocked video request."""
     video = db.get_video(video_id) if video_id else None
-    return _template_response(
-        request,
-        "block_page.html",
-        {
-            "video_id": video_id,
-            "channel_id": channel_id,
-            "reason": reason or "brainrot_detected",
-            "video": video,
-        },
-    )
+    ctx: Dict[str, Any] = {
+        "video_id": video_id,
+        "channel_id": channel_id,
+        "reason": reason or "brainrot_detected",
+        "client_ip": client_ip,
+    }
+    if video:
+        ctx.update({
+            "video_title":    video.get("title") or "",
+            "channel_name":   video.get("channel_name") or video.get("channel_id") or "",
+            "thumbnail_url":  video.get("thumbnail_url") or "",
+            "combined_score": video.get("combined_score") or 0,
+            "keyword_score":  video.get("keyword_score") or 0,
+            "scene_score":    video.get("scene_score") or 0,
+            "audio_score":    video.get("audio_score") or 0,
+            "matched_keywords": _extract_keywords(video.get("matched_keywords")),
+        })
+    return _template_response(request, "block_page.html", ctx)
 
 
 @app.get("/warning", response_class=HTMLResponse)
@@ -1206,17 +1216,25 @@ async def warning_page(
 ):
     """Warning page shown for soft-blocked videos."""
     video = db.get_video(video_id) if video_id else None
-    return _template_response(
-        request,
-        "warning_page.html",
-        {
-            "video_id": video_id,
-            "channel_id": channel_id,
-            "reason": reason or "potential_brainrot",
-            "video": video,
-            "proceed_url": f"https://www.youtube.com/watch?v={video_id}" if video_id else "#",
-        },
-    )
+    ctx: Dict[str, Any] = {
+        "video_id": video_id,
+        "channel_id": channel_id,
+        "reason": reason or "potential_brainrot",
+        "bypass_url": f"https://www.youtube.com/watch?v={video_id}" if video_id else "",
+        "origin_url": f"https://www.youtube.com/watch?v={video_id}" if video_id else "",
+    }
+    if video:
+        ctx.update({
+            "video_title":    video.get("title") or "",
+            "channel_name":   video.get("channel_name") or video.get("channel_id") or "",
+            "thumbnail_url":  video.get("thumbnail_url") or "",
+            "combined_score": video.get("combined_score") or 0,
+            "keyword_score":  video.get("keyword_score") or 0,
+            "scene_score":    video.get("scene_score") or 0,
+            "audio_score":    video.get("audio_score") or 0,
+            "matched_keywords": _extract_keywords(video.get("matched_keywords")),
+        })
+    return _template_response(request, "warning_page.html", ctx)
 
 
 # ---------------------------------------------------------------------------

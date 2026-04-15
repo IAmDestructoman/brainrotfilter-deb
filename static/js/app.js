@@ -465,7 +465,12 @@ function escapeHtml(str) {
 
 function relativeTime(dateStr) {
   if (!dateStr) return '—';
+  // Timestamps from DB are UTC but lack 'Z' — append it so JS parses as UTC
+  if (typeof dateStr === 'string' && !dateStr.endsWith('Z') && !dateStr.includes('+')) {
+    dateStr += 'Z';
+  }
   const date = new Date(dateStr);
+  if (isNaN(date)) return '—';
   const diff = (Date.now() - date) / 1000;
   if (diff < 60)   return `${Math.floor(diff)}s ago`;
   if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
@@ -475,7 +480,11 @@ function relativeTime(dateStr) {
 
 function formatDate(dateStr) {
   if (!dateStr) return '—';
-  return new Date(dateStr).toLocaleString();
+  if (typeof dateStr === 'string' && !dateStr.endsWith('Z') && !dateStr.includes('+')) {
+    dateStr += 'Z';
+  }
+  const date = new Date(dateStr);
+  return isNaN(date) ? '—' : date.toLocaleString();
 }
 
 /* ── Loading helpers ───────────────────────────────────────────── */

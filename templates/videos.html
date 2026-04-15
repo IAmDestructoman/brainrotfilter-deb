@@ -177,7 +177,7 @@ async function loadVideos(params = {}) {
   tbody.innerHTML = '<tr><td colspan="11"><div class="loading-overlay"><div class="spinner lg"></div><span>Loading videos\u2026</span></div></td></tr>';
 
   try {
-    const qs = new URLSearchParams({ limit: 500, ...params });
+    const qs = new URLSearchParams({ limit: 500, order_by: 'analyzed_at', order_dir: 'DESC', ...params });
     const data = await BF.fetchJSON(`/api/videos?${qs}`);
     allVideos = data.items || data || [];
     filteredVids = [...allVideos];

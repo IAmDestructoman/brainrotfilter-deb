@@ -43,7 +43,8 @@ SQUID_HTTP_PORT  = 3128
 SQUID_HTTPS_PORT = 3129
 
 # How long (seconds) the client is blocked from reconnecting after a kill
-BLOCK_DURATION_SECONDS = 120
+# Set high enough to last for a full-length video (2 hours = 7200s)
+BLOCK_DURATION_SECONDS = 7200
 
 # Active iptables block rules: {client_ip: monotonic expiry time}
 _active_blocks: Dict[str, float] = {}
@@ -204,8 +205,8 @@ def kill_states_for_video(
     3. Add a temporary iptables REJECT rule so the player cannot immediately
        reconnect and refill the buffer.
 
-    The iptables rule expires after BLOCK_DURATION_SECONDS (default 120 s),
-    allowing normal browsing to resume once the video buffer has drained.
+    The iptables rule expires after BLOCK_DURATION_SECONDS (default 7200 s),
+    preventing the player from refilling the buffer for a full video session.
 
     Returns (success, connections_killed_count).
     """
@@ -244,6 +245,14 @@ def kill_states_for_channel(client_ip: str, channel_id: str) -> Tuple[bool, int]
     """Kill connections when an entire channel is blocked."""
     logger.info("Channel block kill: client=%s channel=%s", client_ip, channel_id)
     return kill_states_for_video(client_ip, video_id=f"channel:{channel_id}")
+
+
+def is_client_blocked(client_ip: str) -> bool:
+    """Return True if *client_ip* currently has an active iptables block."""
+    now = time.monotonic()
+    with _blocks_lock:
+        expiry = _active_blocks.get(client_ip)
+    return expiry is not None and now < expiry
 
 
 def is_conntrack_available() -> bool:
