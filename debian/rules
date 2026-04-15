@@ -52,13 +52,22 @@ override_dh_auto_install:
 		$(CURDIR)/debian/brainrotfilter/usr/lib/brainrotfilter/scripts/
 	install -m 755 $(CURDIR)/scripts/state_killer.sh \
 		$(CURDIR)/debian/brainrotfilter/usr/lib/brainrotfilter/scripts/
+	install -m 755 $(CURDIR)/scripts/apply_squid_config.sh \
+		$(CURDIR)/debian/brainrotfilter/usr/lib/brainrotfilter/scripts/
+
+	# Install polkit rule for privileged squid config helper
+	install -d $(CURDIR)/debian/brainrotfilter/usr/share/brainrotfilter/polkit
+	install -m 644 $(CURDIR)/debian/50-brainrotfilter.rules \
+		$(CURDIR)/debian/brainrotfilter/usr/share/brainrotfilter/polkit/
 
 	# Install Squid config snippet
 	install -m 644 $(CURDIR)/debian/brainrotfilter-squid.conf \
 		$(CURDIR)/debian/brainrotfilter/etc/squid/conf.d/brainrotfilter.conf
 
-	# Install systemd service
+	# Install systemd services
 	install -m 644 $(CURDIR)/debian/brainrotfilter.service \
+		$(CURDIR)/debian/brainrotfilter/usr/lib/systemd/system/
+	install -m 644 $(CURDIR)/debian/brainrotfilter-squid-apply.service \
 		$(CURDIR)/debian/brainrotfilter/usr/lib/systemd/system/
 
 override_dh_auto_test:

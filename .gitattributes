@@ -1,0 +1,20 @@
+# Force LF line endings for files that must run on Linux
+*.sh         text eol=lf
+debian/*     text eol=lf
+scripts/*    text eol=lf
+
+# Python and YAML - LF everywhere
+*.py         text eol=lf
+*.yml        text eol=lf
+*.yaml       text eol=lf
+
+# HTML/CSS/JS - LF
+*.html       text eol=lf
+*.css        text eol=lf
+*.js         text eol=lf
+
+# JSON
+*.json       text eol=lf
+
+# Default: auto-detect
+*            text=auto

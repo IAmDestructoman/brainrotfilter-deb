@@ -43,3 +43,6 @@ debian/*.debhelper.log
 # Environment files
 .env
 *.env
+
+# Claude Code memory (local only)
+.claude/

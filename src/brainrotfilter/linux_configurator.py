@@ -303,14 +303,52 @@ http_access deny all
         conf_path = CONFIG_DIR / "squid_brainrot.conf"
         conf_path.write_text(squid_conf)
 
-        # Add include to main squid.conf if not present
+        # Add include to main squid.conf if not present.
+        #
+        # /etc/squid/squid.conf is owned by root. The brainrotfilter service
+        # runs with NoNewPrivileges=true so sudo is not available. Instead we:
+        #   1. Write the desired snippet path to a request file.
+        #   2. Ask systemd to start brainrotfilter-squid-apply.service (a
+        #      root oneshot unit) via `systemctl start`, which is permitted
+        #      by the polkit rule installed in postinst.
         main_conf = SQUID_CONF_DIR / "squid.conf"
         include_line = f"include {conf_path}"
+
+        needs_update = False
         if main_conf.exists():
-            content = main_conf.read_text()
-            if str(conf_path) not in content:
-                with open(main_conf, "a") as f:
-                    f.write(f"\n# BrainrotFilter\n{include_line}\n")
+            try:
+                content = main_conf.read_text()
+                needs_update = str(conf_path) not in content
+            except PermissionError:
+                # Can't read it either — assume we need to update
+                needs_update = True
+
+        if needs_update:
+            request_file = DATA_DIR / "squid_include_path"
+            try:
+                request_file.write_text(str(conf_path) + "\n")
+            except Exception as exc:
+                return {
+                    "success": False,
+                    "error": f"Could not write request file {request_file}: {exc}",
+                }
+
+            # Trigger the privileged helper via systemd
+            r = self._run(
+                ["systemctl", "start", "brainrotfilter-squid-apply.service"],
+                timeout=15,
+            )
+            if r.returncode != 0:
+                return {
+                    "success": False,
+                    "error": (
+                        f"Failed to start brainrotfilter-squid-apply.service "
+                        f"(returncode={r.returncode}): {r.stderr[:300]}. "
+                        "Ensure the polkit rule is installed: "
+                        "sudo dpkg-reconfigure brainrotfilter"
+                    ),
+                }
+            logger.info("Squid include directive written via privileged helper.")
 
         # Test configuration
         r = self._run(["squid", "-k", "parse"], timeout=15)

@@ -21,7 +21,12 @@ Restart=on-failure
 RestartSec=5
 
 # Environment
-Environment=PYTHONPATH=/opt/brainrotfilter/src/brainrotfilter
+# PYTHONPATH must point to src/ (the package root), NOT src/brainrotfilter/
+# Setting it to src/brainrotfilter/ caused "from config import config" to
+# resolve correctly but broke absolute imports like "import audio_analyzer"
+# in parallel_analyzer — those imports resolved to None in thread workers.
+Environment=PYTHONPATH=/opt/brainrotfilter/src
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=BRAINROT_DB_PATH=/var/lib/brainrotfilter/brainrotfilter.db
 Environment=BRAINROT_KEYWORDS_PATH=/etc/brainrotfilter/keywords.json
 Environment=BRAINROT_CONFIG_DIR=/etc/brainrotfilter
@@ -30,11 +35,15 @@ Environment=BRAINROT_WWW_DIR=/usr/share/brainrotfilter/www
 Environment=BRAINROT_LOG_DIR=/var/log/brainrotfilter
 
 # Security hardening
+# NOTE: NoNewPrivileges=true prevents sudo from working inside the service.
+# Squid config writes are handled by brainrotfilter-squid-apply.service
+# (a separate root-level oneshot unit triggered via systemd socket activation)
+# rather than calling sudo directly from Python code.
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/lib/brainrotfilter /var/log/brainrotfilter /etc/brainrotfilter
-PrivateTmp=true
+ReadWritePaths=/var/lib/brainrotfilter /var/log/brainrotfilter /etc/brainrotfilter /tmp
+PrivateTmp=false
 
 # Resource limits
 LimitNOFILE=65536

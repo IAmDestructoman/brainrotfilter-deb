@@ -5,9 +5,9 @@ Imported by analyzer_service.py for the /version endpoint and admin panel,
 and by setup/install scripts to stamp built packages.
 """
 
-__version__ = "1.0.0"
-__version_info__ = (1, 0, 0)
-__release_date__ = "2026-04-12"
+__version__ = "1.0.1"
+__version_info__ = (1, 0, 1)
+__release_date__ = "2026-04-15"
 
 # Human-readable name shown in the admin UI header
 __app_name__ = "BrainrotFilter"

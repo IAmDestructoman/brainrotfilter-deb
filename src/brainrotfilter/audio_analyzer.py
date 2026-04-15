@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shutil
 import subprocess
 import tempfile
 import time
@@ -322,18 +323,37 @@ def _analyze_nlp(
 # ---------------------------------------------------------------------------
 
 
-def analyze(video_path: str, video_id: str = "") -> AnalysisResult:
+def analyze(video_path: str, video_id: str = "", **_kwargs) -> AnalysisResult:
     """
     Run the full audio analysis pipeline on a downloaded video file.
 
     Args:
         video_path: Local path to the downloaded video file.
         video_id:   YouTube video ID (for logging only).
+        **_kwargs:  Accepted but ignored — allows callers such as
+                    parallel_analyzer to pass _whisper_model without
+                    causing a TypeError that silently returns score=0.
 
     Returns:
         AnalysisResult with module="audio", score, details.
     """
     start = time.monotonic()
+
+    # Verify ffmpeg is available before spending time on anything else.
+    # Without this check, librosa.load() raises a backend error that is
+    # caught by the broad except below and silently returns score=0.
+    if not shutil.which("ffmpeg"):
+        logger.error(
+            "ffmpeg is not on PATH — audio analysis is disabled. "
+            "Install it with: sudo apt-get install -y ffmpeg"
+        )
+        return AnalysisResult(
+            module="audio",
+            score=0.0,
+            details={"error": "ffmpeg not found on PATH"},
+            error="ffmpeg not found",
+            duration_s=0.0,
+        )
 
     if not Path(video_path).exists():
         elapsed = time.monotonic() - start

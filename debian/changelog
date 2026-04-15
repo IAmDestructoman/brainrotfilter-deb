@@ -1,3 +1,27 @@
+brainrotfilter (1.0.1-1) unstable; urgency=medium
+
+  * Fix wizard permission error writing /etc/squid/squid.conf
+    (LP: #1) configure_squid() now writes the desired snippet path to
+    /var/lib/brainrotfilter/squid_include_path and triggers the new
+    brainrotfilter-squid-apply.service (root oneshot) via systemctl
+    start, permitted by debian/50-brainrotfilter.rules polkit rule.
+    NoNewPrivileges=true in the main service prevented sudo from working.
+  * Fix audio analysis always returning score=0
+    - PYTHONPATH in brainrotfilter.service was pointing to
+      src/brainrotfilter/ instead of src/, causing "import audio_analyzer"
+      to resolve to None inside parallel_analyzer thread workers.
+    - audio_analyzer.analyze() now accepts **_kwargs so callers may
+      pass _whisper_model= without triggering a TypeError that was
+      silently caught and converted to score=0.
+    - Added shutil.which("ffmpeg") guard at startup; missing ffmpeg now
+      logs a clear error instead of falling through with score=0.
+  * Add scripts/apply_squid_config.sh privileged helper
+  * Add debian/brainrotfilter-squid-apply.service root oneshot unit
+  * Add debian/50-brainrotfilter.rules polkit rule
+  * postinst: install polkit rule and enable squid-apply service
+
+ -- IAmDestructoman <github@destructoman.dev>  Tue, 15 Apr 2026 00:00:00 +0000
+
 brainrotfilter (1.0.0-1) unstable; urgency=medium
 
   * Initial Debian package release

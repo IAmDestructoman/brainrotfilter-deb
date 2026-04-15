@@ -1,0 +1,16 @@
+[Unit]
+Description=BrainrotFilter - Apply Squid configuration (privileged helper)
+Documentation=https://github.com/IAmDestructoman/brainrotfilter-deb
+# This oneshot unit runs as root to write the include directive into
+# /etc/squid/squid.conf, which the main brainrotfilter service cannot
+# do because NoNewPrivileges=true prevents sudo inside the sandbox.
+# The main service triggers this by writing a request file to
+# /var/lib/brainrotfilter/squid_apply_requested and then calling:
+#   systemctl start brainrotfilter-squid-apply.service
+# via a polkit rule that allows the brainrotfilter user to start it.
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/lib/brainrotfilter/scripts/apply_squid_config.sh
+RemainAfterExit=no

@@ -36,8 +36,21 @@ case "$1" in
         chmod 750 /etc/brainrotfilter
         chmod 755 /usr/lib/brainrotfilter/scripts/*.sh
 
+        # Install polkit rule so the brainrotfilter service user can trigger
+        # the privileged brainrotfilter-squid-apply.service without sudo.
+        # (NoNewPrivileges=true in the main service unit blocks sudo entirely.)
+        install -m 0644 /usr/share/brainrotfilter/polkit/50-brainrotfilter.rules \
+            /etc/polkit-1/rules.d/50-brainrotfilter.rules 2>/dev/null || true
+
+        # Make the privileged helper script executable
+        chmod 0755 /usr/lib/brainrotfilter/scripts/apply_squid_config.sh 2>/dev/null || true
+
+        # Add brainrotfilter to the proxy group so it can read Squid files
+        usermod -aG proxy brainrotfilter 2>/dev/null || true
+
         # Enable and start the service
         systemctl daemon-reload
+        systemctl enable brainrotfilter-squid-apply.service || true
         systemctl enable brainrotfilter.service || true
         systemctl start brainrotfilter.service || true
 

@@ -54,3 +54,23 @@ jobs:
           BRAINROT_CONFIG_DIR: /tmp/brainrotfilter_test_config
           BRAINROT_DATA_DIR: /tmp/brainrotfilter_test_data
           BRAINROT_KEYWORDS_PATH: ${{ github.workspace }}/data/keywords.json
+
+  build-deb:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential dpkg-dev debhelper dh-python python3
+
+      - name: Build .deb package
+        run: dpkg-buildpackage -us -uc -b
+
+      - name: Verify package
+        run: |
+          DEB=$(ls ../brainrotfilter_*.deb 2>/dev/null | head -1)
+          [ -n "$DEB" ] || { echo "ERROR: no .deb produced"; exit 1; }
+          echo "Built: $(basename $DEB)"
+          dpkg-deb --info "$DEB"
