@@ -846,11 +846,15 @@ async def api_videos(
     channel_id: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
-    per_page: int = Query(50, ge=1, le=200),
+    per_page: int = Query(50, ge=1, le=2000),
+    limit: Optional[int] = Query(None, ge=1, le=2000),
     order_by: str = Query("analyzed_at"),
     order_dir: str = Query("DESC"),
 ) -> Dict[str, Any]:
     """List analyzed videos with optional filtering and pagination."""
+    # Accept 'limit' as an alias for 'per_page' (older frontend used this name).
+    if limit is not None:
+        per_page = limit
     items, total = db.get_videos(
         status=status,
         channel_id=channel_id,
