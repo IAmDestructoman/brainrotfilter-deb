@@ -273,6 +273,39 @@ _last_identify: Dict[str, float] = {}
 _identify_lock = threading.Lock()
 IDENTIFY_STALE_SECONDS = 45  # window considered "recent"
 
+# Clients whose CDN should be denied because they recently hit a blocked
+# video. This enforces the block on googlevideo.com chunks (which don't
+# carry a video_id we can parse). client_ip -> expiry monotonic time.
+_cdn_blocked_clients: Dict[str, float] = {}
+_cdn_block_lock = threading.Lock()
+CDN_BLOCK_DURATION_SECONDS = 3600  # 1 hour
+
+
+def _block_client_cdn(client_ip: str, duration: int = CDN_BLOCK_DURATION_SECONDS) -> None:
+    if not client_ip or client_ip in ("-", "unknown", "localhost"):
+        return
+    with _cdn_block_lock:
+        _cdn_blocked_clients[client_ip] = time.monotonic() + duration
+
+
+def _unblock_client_cdn(client_ip: str) -> None:
+    with _cdn_block_lock:
+        _cdn_blocked_clients.pop(client_ip, None)
+
+
+def _is_client_cdn_blocked(client_ip: str) -> bool:
+    if not client_ip:
+        return False
+    now = time.monotonic()
+    with _cdn_block_lock:
+        exp = _cdn_blocked_clients.get(client_ip)
+        if exp is None:
+            return False
+        if now >= exp:
+            _cdn_blocked_clients.pop(client_ip, None)
+            return False
+        return True
+
 
 def _mark_client_pending(client_ip: str, video_id: str) -> None:
     if not client_ip or client_ip in ("-", "unknown", "localhost"):
@@ -513,6 +546,10 @@ def _run_analysis(video_id: str) -> None:
                         "Killed %d state(s) for client %s watching flagged video %s",
                         count, cip, video_id,
                     )
+                # Sustained CDN deny — stops the player from refilling the
+                # buffer after the brief iptables RST window expires.
+                if status_str == "block":
+                    _block_client_cdn(cip)
         except Exception as exc:
             logger.error("State kill after flagging failed for %s: %s", video_id, exc)
 
@@ -696,9 +733,17 @@ async def api_client_pending(ip: str = Query(...)) -> Dict[str, Any]:
     """
     pending = _is_client_pending(ip)
     stale = _client_identify_stale(ip)
+    cdn_blocked = _is_client_cdn_blocked(ip)
+    reason = "ok"
+    if cdn_blocked:
+        reason = "cdn_blocked"
+    elif pending:
+        reason = "analyzing"
+    elif stale:
+        reason = "no_identify"
     return {
-        "pending": pending or stale,
-        "reason": "analyzing" if pending else ("no_identify" if stale else "ok"),
+        "pending": pending or stale or cdn_blocked,
+        "reason": reason,
         "client_ip": ip,
     }
 
@@ -798,6 +843,10 @@ async def api_check(req: CheckRequest) -> CheckResponse:
         status = db.get_video_status(vid)
         if status == "block":
             _log_client(video_id=vid, action="block")
+            # Sustained per-client CDN deny so the player can't keep streaming
+            # googlevideo.com chunks after the URL-level ACL denial.
+            if req.client_ip:
+                _block_client_cdn(req.client_ip)
             return CheckResponse(
                 action="block",
                 video_id=vid,
