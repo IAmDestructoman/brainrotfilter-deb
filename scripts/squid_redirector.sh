@@ -137,6 +137,34 @@ while IFS= read -r line; do
         continue
     fi
 
+    # Determine if this URL represents an ACTUAL playback intent.
+    # We only want to queue analysis and trigger blocking for videos the
+    # user is actually trying to watch — not every thumbnail that scrolls
+    # into view on the home page / sidebar. Passive UI thumbnails are
+    # passed through with no API interaction at all.
+    is_playback=0
+    case "$url" in
+        *youtube.com/watch*|*youtube.com/shorts/*|*youtube.com/embed/*|*youtu.be/*)
+            is_playback=1 ;;
+        *youtube.com/api/stats/watchtime*|*youtube.com/api/stats/qoe*|*youtube.com/api/stats/playback*)
+            is_playback=1 ;;
+        *youtube.com/api/timedtext*)
+            is_playback=1 ;;
+        *youtubei/v1/player*|*youtubei/v1/next*)
+            is_playback=1 ;;
+        *ytimg.com/sb/*)
+            # Storyboards only load during active playback (scrub preview).
+            is_playback=1 ;;
+    esac
+
+    # Passive thumbnail or similar — skip API entirely.  Drastically reduces
+    # analysis queue load (home-page scroll no longer triggers hundreds of
+    # queues) and removes duplicate work with the ACL helper.
+    if [ "$is_playback" = "0" ]; then
+        echo "${id} OK"
+        continue
+    fi
+
     # Call the BrainrotFilter API to check this video
     response=$(curl -s --max-time "$CURL_TIMEOUT" \
         -X POST "${BRAINROT_API}/api/check" \
