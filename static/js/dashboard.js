@@ -319,6 +319,93 @@ function renderTopChannels(channels) {
   `).join('');
 }
 
+/* ── Currently Processing Panel ────────────────────────────────── */
+
+const STEP_LABELS = {
+  starting:  'Starting…',
+  metadata:  'Fetching metadata',
+  keywords:  'Keyword analysis',
+  scene:     'Scene analysis',
+  audio:     'Audio analysis',
+  scoring:   'Scoring',
+};
+
+const STEP_ORDER = ['starting', 'metadata', 'keywords', 'scene', 'audio', 'scoring'];
+
+function stepProgress(step) {
+  const idx = STEP_ORDER.indexOf(step);
+  return idx < 0 ? 0 : Math.round(((idx + 1) / STEP_ORDER.length) * 100);
+}
+
+function renderProcessingPanel(status) {
+  const section = document.getElementById('processing-section');
+  const list    = document.getElementById('processing-list');
+  const info    = document.getElementById('processing-queue-info');
+  if (!section || !list) return;
+
+  const jobs = status?.in_progress || [];
+  const queued = status?.queue_size ?? 0;
+
+  if (jobs.length === 0 && queued === 0) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = '';
+  if (info) {
+    info.textContent = queued > 0 ? `${queued} waiting in queue` : '';
+  }
+
+  list.innerHTML = jobs.map(job => {
+    const pct   = stepProgress(job.step);
+    const label = STEP_LABELS[job.step] || job.step;
+    const secs  = job.elapsed_s ?? 0;
+    const elapsed = secs < 60
+      ? `${secs.toFixed(1)}s`
+      : `${Math.floor(secs / 60)}m ${(secs % 60).toFixed(0)}s`;
+    const title = BF.escapeHtml(job.title || job.video_id);
+
+    return `
+      <div style="padding:10px 16px;border-bottom:1px solid rgba(255,255,255,0.05)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-weight:500;font-size:0.9rem;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:70%"
+                title="${title}">${title}</span>
+          <span style="font-size:0.75rem;color:var(--text-dim);flex-shrink:0;margin-left:8px">${elapsed}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="flex:1;background:rgba(255,255,255,0.07);border-radius:4px;height:4px;overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:var(--accent);border-radius:4px;transition:width 0.4s ease"></div>
+          </div>
+          <span style="font-size:0.72rem;color:var(--text-dim);white-space:nowrap;min-width:120px">${BF.escapeHtml(label)}</span>
+        </div>
+      </div>`;
+  }).join('');
+
+  // If only queued (no active jobs yet), show a placeholder
+  if (jobs.length === 0 && queued > 0) {
+    list.innerHTML = `<div style="padding:12px 16px;color:var(--text-dim);font-size:0.85rem">
+      ${queued} video${queued !== 1 ? 's' : ''} waiting to be analysed…</div>`;
+  }
+}
+
+let _processingTimer = null;
+
+function startProcessingPoll() {
+  if (_processingTimer) return;
+  _pollProcessing();
+}
+
+async function _pollProcessing() {
+  try {
+    const status = await BF.fetchJSON('/api/analysis/status');
+    renderProcessingPanel(status);
+    const active = (status?.in_progress?.length ?? 0) + (status?.queue_size ?? 0);
+    _processingTimer = setTimeout(_pollProcessing, active > 0 ? 1500 : 5000);
+  } catch {
+    _processingTimer = setTimeout(_pollProcessing, 5000);
+  }
+}
+
 /* ── Main Load & Refresh ────────────────────────────────────────── */
 
 async function loadDashboard() {
@@ -381,6 +468,7 @@ window.addEventListener('resize', () => {
 document.addEventListener('DOMContentLoaded', () => {
   loadDashboard();
   startAutoRefresh(30000);
+  startProcessingPoll();
 
   const refreshBtn = document.getElementById('btn-refresh-dashboard');
   if (refreshBtn) {

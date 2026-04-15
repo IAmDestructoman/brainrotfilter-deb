@@ -378,6 +378,36 @@ class DatabaseManager:
             ).fetchone()
         return row["status"] if row else None
 
+    def get_all_videos_for_recalculate(self) -> List[Dict[str, Any]]:
+        """Fetch score columns for all non-manually-overridden videos."""
+        with _get_conn(self.db_path) as conn:
+            rows = conn.execute(
+                """
+                SELECT video_id, status, combined_score,
+                       keyword_score, scene_score, audio_score,
+                       comment_score, engagement_score, thumbnail_score, shorts_score
+                FROM videos
+                WHERE manual_override = 0
+                """
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def update_video_scores_bulk(
+        self,
+        updates: List[Dict[str, Any]],
+    ) -> None:
+        """Bulk-update combined_score and status for non-overridden videos."""
+        now = self._now()
+        with _get_conn(self.db_path) as conn:
+            conn.executemany(
+                """
+                UPDATE videos
+                SET combined_score = ?, status = ?, updated_at = ?
+                WHERE video_id = ? AND manual_override = 0
+                """,
+                [(u["combined_score"], u["status"], now, u["video_id"]) for u in updates],
+            )
+
     # ------------------------------------------------------------------
     # Channels
     # ------------------------------------------------------------------

@@ -14,6 +14,10 @@
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 019-9 9.75 9.75 0 016.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 01-9 9 9.75 9.75 0 01-6.74-2.74L3 16"/></svg>
       Reset to Defaults
     </button>
+    <button class="btn btn-secondary" onclick="recalculateScores()" id="btn-recalculate">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="23,4 23,11 16,11"/><polyline points="1,20 1,13 8,13"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 11M1 13l4.64 5.36A9 9 0 0020.49 15"/></svg>
+      Recalculate Scores
+    </button>
     <button class="btn btn-primary" onclick="saveAllSettings()" id="btn-save">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>
       Save Settings
@@ -445,6 +449,30 @@ async function saveAllSettings() {
   } finally {
     btn.disabled = false;
     btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg> Save Settings`;
+  }
+}
+
+/* ── Recalculate scores ──────────────────────────────────────── */
+async function recalculateScores() {
+  const btn = document.getElementById('btn-recalculate');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner" style="width:14px;height:14px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:6px"></div> Recalculating\u2026';
+
+  try {
+    const result = await BF.postJSON('/api/videos/recalculate', {});
+    let msg = `Recalculated ${result.recalculated} of ${result.total} videos`;
+    if (result.changed > 0 && result.breakdown) {
+      const parts = Object.entries(result.breakdown).map(([k, v]) => `${v}\u00d7 ${k}`);
+      msg += ' \u2014 status changed: ' + parts.join(', ');
+    } else if (result.changed === 0) {
+      msg += ' \u2014 no status changes';
+    }
+    BF.showToast(msg, result.changed > 0 ? 'success' : 'info');
+  } catch (e) {
+    BF.showToast('Recalculate failed: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="23,4 23,11 16,11"/><polyline points="1,20 1,13 8,13"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 11M1 13l4.64 5.36A9 9 0 0020.49 15"/></svg> Recalculate Scores`;
   }
 }
 

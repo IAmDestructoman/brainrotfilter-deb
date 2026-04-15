@@ -66,5 +66,18 @@ fi
 
 # Clean up request file
 rm -f "$REQUEST_FILE"
+
+# -- Write conf.d snippet if requested ------------------------------------
+CONFD_REQUEST="/var/lib/brainrotfilter/squid_confd_content"
+CONFD_FILE="/etc/squid/conf.d/brainrotfilter.conf"
+
+if [ -f "$CONFD_REQUEST" ]; then
+    mkdir -p /etc/squid/conf.d
+    cp "$CONFD_REQUEST" "$CONFD_FILE"
+    chmod 644 "$CONFD_FILE"
+    rm -f "$CONFD_REQUEST"
+    log "Wrote $CONFD_FILE from request file."
+fi
+
 log "Squid configuration applied successfully."
 exit 0
