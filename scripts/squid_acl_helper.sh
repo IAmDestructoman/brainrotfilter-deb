@@ -152,14 +152,15 @@ while IFS= read -r line; do
             is_playback=1 ;;
         *youtube.com/api/timedtext*)
             is_playback=1 ;;
-        *youtubei/v1/player*|*youtubei/v1/next*)
-            is_playback=1 ;;
         *ytimg.com/sb/*)
-            # Storyboards: loaded during playback (scrub preview) — deny.
+            # Storyboards load only during active playback scrubbing.
             is_playback=1 ;;
         *ytimg.com/vi/*|*ytimg.com/vi_webp/*)
             # Passive thumbnails in UI — never deny.
             is_playback=0 ;;
+        # NOTE: /youtubei/v1/player fires for home-feed preview metadata,
+        # not just the actively playing video — leave it unmarked so we
+        # don't break the home page rendering.
     esac
 
     # Build JSON body — include client_ip when available
