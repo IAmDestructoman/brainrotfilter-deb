@@ -33,10 +33,9 @@ log "started -- API=${BRAINROT_API}"
 while IFS= read -r line; do
     line=$(echo "$line" | tr -d '\r')
 
-    # Squid sends: URL SRC_IP
-    src_ip="${line##* }"
-    # If there was no space, there's no SRC -> allow
-    if [ "$src_ip" = "$line" ] || [ -z "$src_ip" ] || [ "$src_ip" = "-" ]; then
+    # Squid now sends only %SRC (one field). Strip any whitespace just in case.
+    src_ip=$(echo "$line" | awk '{print $1}')
+    if [ -z "$src_ip" ] || [ "$src_ip" = "-" ]; then
         echo "ERR"
         continue
     fi

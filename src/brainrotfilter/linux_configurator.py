@@ -353,7 +353,7 @@ http_access allow localhost
             "# Pre-emptive CDN block — deny googlevideo.com while the client's\n"
             "# currently-watching video is still being analysed.  Prevents any\n"
             "# content from being pre-buffered before the verdict is known.\n"
-            f"external_acl_type brainrot_cdn_pending ttl=2 negative_ttl=2 %URI %SRC {SCRIPTS_DIR}/squid_cdn_block_helper.sh\n"
+            f"external_acl_type brainrot_cdn_pending children-max=20 children-startup=5 concurrency=0 ttl=3 negative_ttl=3 %SRC {SCRIPTS_DIR}/squid_cdn_block_helper.sh\n"
             "acl brainrot_client_pending external brainrot_cdn_pending\n"
             "acl youtube_cdn_domains dstdomain .googlevideo.com\n"
             "http_access deny brainrot_client_pending youtube_cdn_domains\n"
