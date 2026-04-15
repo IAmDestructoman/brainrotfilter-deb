@@ -271,7 +271,11 @@ PENDING_TIMEOUT_SECONDS = 180  # hard cap in case analysis is lost
 # deny the CDN so the player stalls and triggers a fresh page/thumbnail load.
 _last_identify: Dict[str, float] = {}
 _identify_lock = threading.Lock()
-IDENTIFY_STALE_SECONDS = 45  # window considered "recent"
+# Stale window must be longer than typical idle periods between stats URLs
+# (~30s during playback, longer when browsing sidebars/paused). Too short
+# and the defensive CDN block locks up normal usage; too long and a
+# cached-thumbnail autoplay can slip in unnoticed.
+IDENTIFY_STALE_SECONDS = 180
 
 # Per-client set of recently-requested BLOCKED video_ids.  A client is
 # CDN-blocked while any of these entries are still fresh.  Entries are
