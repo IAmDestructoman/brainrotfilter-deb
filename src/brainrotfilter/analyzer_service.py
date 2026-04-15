@@ -748,17 +748,20 @@ async def api_client_pending(ip: str = Query(...)) -> Dict[str, Any]:
     chunks stream through but no identifying URL reaches Squid.
     """
     pending = _is_client_pending(ip)
-    stale = _client_identify_stale(ip)
     cdn_blocked = _is_client_cdn_blocked(ip)
+    # Note: stale/no_identify defensive check is intentionally disabled.
+    # In testing it caused too many false-positive denies for legitimate
+    # playback because real-world stats URLs sometimes lack docid and
+    # the helper's background heartbeat doesn't refresh reliably from
+    # Squid's helper environment. Per-video CDN block (analyzing or
+    # known-blocked) still enforces actual blocking decisions.
     reason = "ok"
     if cdn_blocked:
         reason = "cdn_blocked"
     elif pending:
         reason = "analyzing"
-    elif stale:
-        reason = "no_identify"
     return {
-        "pending": pending or stale or cdn_blocked,
+        "pending": pending or cdn_blocked,
         "reason": reason,
         "client_ip": ip,
     }
