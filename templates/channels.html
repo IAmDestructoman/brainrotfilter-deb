@@ -142,7 +142,7 @@ let paginator        = null;
 /* ── Load ──────────────────────────────────────────────────── */
 async function loadChannels() {
   const tbody = document.getElementById('channels-tbody');
-  BF.showLoading(tbody.parentElement, 'Loading channels…');
+  tbody.innerHTML = '<tr><td colspan="8"><div class="loading-overlay"><div class="spinner lg"></div><span>Loading channels\u2026</span></div></td></tr>';
 
   try {
     const data = await BF.fetchJSON('/api/channels?limit=500');
@@ -150,7 +150,7 @@ async function loadChannels() {
     filteredChannels = [...allChannels];
     renderTable(filteredChannels);
   } catch (e) {
-    BF.showError(tbody.parentElement, e.message);
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><h3>Error</h3><p>${BF.escapeHtml(e.message)}</p></div></td></tr>`;
     BF.showToast('Failed to load channels: ' + e.message, 'error');
   }
 }

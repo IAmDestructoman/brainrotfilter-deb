@@ -174,7 +174,7 @@ let videoBulk    = null;
 /* ── Load Videos ────────────────────────────────────────────── */
 async function loadVideos(params = {}) {
   const tbody = document.getElementById('videos-tbody');
-  BF.showLoading(tbody.parentElement, 'Loading videos…');
+  tbody.innerHTML = '<tr><td colspan="11"><div class="loading-overlay"><div class="spinner lg"></div><span>Loading videos\u2026</span></div></td></tr>';
 
   try {
     const qs = new URLSearchParams({ limit: 500, ...params });
@@ -183,7 +183,7 @@ async function loadVideos(params = {}) {
     filteredVids = [...allVideos];
     renderTable(filteredVids);
   } catch (e) {
-    BF.showError(tbody.parentElement, e.message);
+    tbody.innerHTML = `<tr><td colspan="11"><div class="empty-state"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><h3>Error</h3><p>${BF.escapeHtml(e.message)}</p></div></td></tr>`;
     BF.showToast('Failed to load videos: ' + e.message, 'error');
   }
 }
