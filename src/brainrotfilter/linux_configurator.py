@@ -349,6 +349,14 @@ http_access allow localhost
             "delay_parameters 1 -1/-1 32768/524288\n"
             "delay_access 1 allow youtube_cdn_throttle\n"
             "delay_access 1 deny all\n"
+            "\n"
+            "# Pre-emptive CDN block — deny googlevideo.com while the client's\n"
+            "# currently-watching video is still being analysed.  Prevents any\n"
+            "# content from being pre-buffered before the verdict is known.\n"
+            f"external_acl_type brainrot_cdn_pending ttl=2 negative_ttl=2 %URI %SRC {SCRIPTS_DIR}/squid_cdn_block_helper.sh\n"
+            "acl brainrot_client_pending external brainrot_cdn_pending\n"
+            "acl youtube_cdn_domains dstdomain .googlevideo.com\n"
+            "http_access deny brainrot_client_pending youtube_cdn_domains\n"
         )
         confd_request = DATA_DIR / "squid_confd_content"
         try:
@@ -550,7 +558,8 @@ http_access allow localhost
             pkg_scripts = Path("/usr/share/brainrotfilter/scripts")
 
         installed = []
-        for script_name in ["squid_redirector.sh", "squid_acl_helper.sh", "state_killer.sh"]:
+        for script_name in ["squid_redirector.sh", "squid_acl_helper.sh",
+                            "squid_cdn_block_helper.sh", "state_killer.sh"]:
             src = pkg_scripts / script_name
             dst = SCRIPTS_DIR / script_name
             if src.exists():

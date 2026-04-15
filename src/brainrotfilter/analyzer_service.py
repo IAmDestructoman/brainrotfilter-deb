@@ -239,6 +239,9 @@ class AnalysisQueue:
                 self._end_job(video_id)
                 with self._lock:
                     self._in_flight.discard(video_id)
+                # Release any clients that were waiting on this video so their
+                # CDN access is restored (analysis outcome already written to DB).
+                _clear_client_pending(video_id)
                 self._queue.task_done()
 
 
@@ -246,6 +249,57 @@ analysis_queue = AnalysisQueue(
     max_workers=config.get_int("analysis_worker_threads"),
     maxsize=config.get_int("analysis_queue_maxsize"),
 )
+
+
+# ---------------------------------------------------------------------------
+# Pre-emptive CDN blocking
+#
+# When a client starts watching a new (unanalyzed) video we deny their
+# googlevideo.com requests until analysis completes, so the player can't
+# pre-buffer content that might later be blocked.
+#
+# Key -> client_ip; Value -> set of video_ids still awaiting analysis.
+# A client is "pending" while their set is non-empty.  Entries are also
+# guarded by a hard timeout so a stuck video doesn't block a client forever.
+# ---------------------------------------------------------------------------
+_pending_clients: Dict[str, Dict[str, float]] = {}   # client_ip -> {video_id: expiry}
+_pending_lock = threading.Lock()
+PENDING_TIMEOUT_SECONDS = 180  # hard cap in case analysis is lost
+
+
+def _mark_client_pending(client_ip: str, video_id: str) -> None:
+    if not client_ip or client_ip in ("-", "unknown", "localhost"):
+        return
+    expiry = time.monotonic() + PENDING_TIMEOUT_SECONDS
+    with _pending_lock:
+        _pending_clients.setdefault(client_ip, {})[video_id] = expiry
+
+
+def _clear_client_pending(video_id: str) -> None:
+    """Remove *video_id* from every client's pending set."""
+    with _pending_lock:
+        for cip in list(_pending_clients.keys()):
+            _pending_clients[cip].pop(video_id, None)
+            if not _pending_clients[cip]:
+                _pending_clients.pop(cip, None)
+
+
+def _is_client_pending(client_ip: str) -> bool:
+    if not client_ip:
+        return False
+    now = time.monotonic()
+    with _pending_lock:
+        entries = _pending_clients.get(client_ip)
+        if not entries:
+            return False
+        # Drop expired entries
+        expired = [vid for vid, exp in entries.items() if now >= exp]
+        for vid in expired:
+            entries.pop(vid, None)
+        if not entries:
+            _pending_clients.pop(client_ip, None)
+            return False
+        return True
 
 
 # Background thread: clean up expired iptables block rules every 30 s
@@ -580,11 +634,32 @@ async def api_analyze(req: AnalyzeRequest) -> AnalyzeResponse:
             pass
 
     queued = analysis_queue.enqueue(video_id, priority=req.priority)
+
+    # Pre-emptive CDN block: mark the client as pending so their googlevideo.com
+    # requests are denied until analysis completes.  Also block if the video is
+    # already in-flight (duplicate queue attempt).
+    if req.client_ip:
+        existing = db.get_video(video_id) if not queued else None
+        # Only mark pending when we do not yet have a verdict for this video.
+        if not existing or existing.get("status") in (None, "pending", ""):
+            _mark_client_pending(req.client_ip, video_id)
+
     return AnalyzeResponse(
         video_id=video_id,
         queued=queued,
         message="Queued for analysis" if queued else "Already in queue or duplicate",
     )
+
+
+@app.get("/api/client-pending")
+async def api_client_pending(ip: str = Query(...)) -> Dict[str, Any]:
+    """Return whether *ip* has any unanalyzed videos in flight.
+
+    Called by the Squid CDN helper for every googlevideo.com request; while
+    a client has pending analyses their CDN requests are denied so no video
+    data can be pre-buffered before the verdict.
+    """
+    return {"pending": _is_client_pending(ip), "client_ip": ip}
 
 
 @app.get("/api/analysis/status")
