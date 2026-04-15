@@ -270,9 +270,13 @@ ssl_bump bump step3 youtube_sites
 ssl_bump splice all
 
 # -- URL Rewriter --
+# Narrow to active-playback URLs only, via a url_regex pre-filter. Without
+# this the redirector is invoked for every thumbnail / feed API / telemetry
+# request, which swamps the helper pool and stalls the home page.
+acl brainrot_rewrite_url url_regex -i youtube\\.com/watch youtube\\.com/shorts/ youtube\\.com/embed/ youtu\\.be/ youtube\\.com/api/stats/watchtime
 url_rewrite_program {SCRIPTS_DIR}/squid_redirector.sh
-url_rewrite_children 5 startup=2 idle=1 concurrency=1
-url_rewrite_access allow youtube_domains
+url_rewrite_children 20 startup=3 idle=1 concurrency=0
+url_rewrite_access allow brainrot_rewrite_url
 url_rewrite_access deny all
 url_rewrite_bypass on
 
@@ -313,17 +317,23 @@ http_access allow localhost
             "# Loaded via 'include /etc/squid/conf.d/*.conf' BEFORE http_access allow localnet.\n"
             "# Deny rules here fire before the catch-all allow, making blocking effective.\n"
             "\n"
+            "# Fast pre-filter: only URLs that could indicate active video playback.\n"
+            "# Squid's url_regex is evaluated cheaply and short-circuits before any\n"
+            "# expensive external helper is invoked. Thumbnails, qoe telemetry,\n"
+            "# youtubei metadata, and home-feed API calls skip the helpers entirely.\n"
+            "acl youtube_playback_url url_regex -i youtube\\.com/watch youtube\\.com/shorts/ youtube\\.com/embed/ youtu\\.be/ youtube\\.com/api/stats/watchtime\n"
+            "\n"
             "# Hard-block tier (status=block) -- redirect to block page\n"
-            f"external_acl_type brainrot_block_check ttl=60 negative_ttl=30 %URI %SRC {SCRIPTS_DIR}/squid_acl_helper.sh block\n"
+            f"external_acl_type brainrot_block_check children-max=20 children-startup=3 ttl=60 negative_ttl=30 %URI %SRC {SCRIPTS_DIR}/squid_acl_helper.sh block\n"
             "acl brainrot_hard_blocked external brainrot_block_check\n"
             f"deny_info http://{_redirect_ip}:{_port}/blocked brainrot_hard_blocked\n"
-            "http_access deny brainrot_hard_blocked\n"
+            "http_access deny youtube_playback_url brainrot_hard_blocked\n"
             "\n"
             "# Soft-block tier (status=soft_block) -- redirect to warning page\n"
-            f"external_acl_type brainrot_soft_check ttl=60 negative_ttl=30 %URI %SRC {SCRIPTS_DIR}/squid_acl_helper.sh soft_block\n"
+            f"external_acl_type brainrot_soft_check children-max=20 children-startup=3 ttl=60 negative_ttl=30 %URI %SRC {SCRIPTS_DIR}/squid_acl_helper.sh soft_block\n"
             "acl brainrot_soft_blocked external brainrot_soft_check\n"
             f"deny_info http://{_redirect_ip}:{_port}/warning brainrot_soft_blocked\n"
-            "http_access deny brainrot_soft_blocked\n"
+            "http_access deny youtube_playback_url brainrot_soft_blocked\n"
             "\n"
             "# Delay pool — throttle YouTube CDN (googlevideo.com) per-client\n"
             "# Prevents the browser/app from buffering the whole video before\n"
