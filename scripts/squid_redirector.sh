@@ -146,12 +146,12 @@ while IFS= read -r line; do
     case "$url" in
         *youtube.com/watch*|*youtube.com/shorts/*|*youtube.com/embed/*|*youtu.be/*)
             is_playback=1 ;;
-        *youtube.com/api/stats/watchtime*)
+        *youtube.com/api/stats/watchtime*|*youtube.com/api/stats/qoe*|*youtube.com/api/stats/playback*)
+            # Playback telemetry URLs with docid=VIDEO_ID; fire every ~10s
+            # for the video being loaded/played (not home-feed previews).
             is_playback=1 ;;
         *ytimg.com/sb/*)
-            # Storyboards are fetched when the user navigates to a video
-            # (to enable scrub-preview). They do NOT fire during casual
-            # scroll of the home page, unlike vi/ thumbnails.
+            # Storyboards are fetched when user navigates to a video.
             is_playback=1 ;;
     esac
 

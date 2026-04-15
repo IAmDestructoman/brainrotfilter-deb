@@ -273,7 +273,7 @@ ssl_bump splice all
 # Narrow to active-playback URLs only, via a url_regex pre-filter. Without
 # this the redirector is invoked for every thumbnail / feed API / telemetry
 # request, which swamps the helper pool and stalls the home page.
-acl brainrot_rewrite_url url_regex -i youtube\\.com/watch youtube\\.com/shorts/ youtube\\.com/embed/ youtu\\.be/ youtube\\.com/api/stats/watchtime ytimg\\.com/sb/
+acl brainrot_rewrite_url url_regex -i youtube\\.com/watch youtube\\.com/shorts/ youtube\\.com/embed/ youtu\\.be/ youtube\\.com/api/stats/watchtime youtube\\.com/api/stats/qoe youtube\\.com/api/stats/playback ytimg\\.com/sb/
 url_rewrite_program {SCRIPTS_DIR}/squid_redirector.sh
 url_rewrite_children 20 startup=3 idle=1 concurrency=0
 url_rewrite_access allow brainrot_rewrite_url
@@ -321,7 +321,7 @@ http_access allow localhost
             "# Squid's url_regex is evaluated cheaply and short-circuits before any\n"
             "# expensive external helper is invoked. Thumbnails, qoe telemetry,\n"
             "# youtubei metadata, and home-feed API calls skip the helpers entirely.\n"
-            "acl youtube_playback_url url_regex -i youtube\\.com/watch youtube\\.com/shorts/ youtube\\.com/embed/ youtu\\.be/ youtube\\.com/api/stats/watchtime ytimg\\.com/sb/\n"
+            "acl youtube_playback_url url_regex -i youtube\\.com/watch youtube\\.com/shorts/ youtube\\.com/embed/ youtu\\.be/ youtube\\.com/api/stats/watchtime youtube\\.com/api/stats/qoe youtube\\.com/api/stats/playback ytimg\\.com/sb/\n"
             "\n"
             "# Hard-block tier (status=block) -- redirect to block page\n"
             f"external_acl_type brainrot_block_check children-max=20 children-startup=3 ttl=60 negative_ttl=30 %URI %SRC {SCRIPTS_DIR}/squid_acl_helper.sh block\n"
