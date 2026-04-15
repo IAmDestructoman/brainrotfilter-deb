@@ -142,16 +142,18 @@ while IFS= read -r line; do
     # user is actually trying to watch — not every thumbnail that scrolls
     # into view on the home page / sidebar. Passive UI thumbnails are
     # passed through with no API interaction at all.
+    # STRONG = user actually navigated to this video (queue analysis).
+    # WEAK   = telemetry that might fire for hover-preview cards (only
+    #          useful for identifying currently-viewed-or-paused video,
+    #          never for queueing — that floods Processing on scroll).
     is_playback=0
+    is_strong=0
     case "$url" in
         *youtube.com/watch*|*youtube.com/shorts/*|*youtube.com/embed/*|*youtu.be/*)
-            is_playback=1 ;;
-        *youtube.com/api/stats/watchtime*|*youtube.com/api/stats/qoe*|*youtube.com/api/stats/playback*)
-            # Playback telemetry URLs with docid=VIDEO_ID; fire every ~10s
-            # for the video being loaded/played (not home-feed previews).
-            is_playback=1 ;;
+            is_playback=1; is_strong=1 ;;
         *ytimg.com/sb/*)
-            # Storyboards are fetched when user navigates to a video.
+            is_playback=1; is_strong=1 ;;
+        *youtube.com/api/stats/watchtime*|*youtube.com/api/stats/qoe*|*youtube.com/api/stats/playback*)
             is_playback=1 ;;
     esac
 
@@ -194,8 +196,10 @@ while IFS= read -r line; do
         *)
             echo "${id} OK"
 
-            # If the video is unknown, queue it for background analysis
-            if [ "$reason" = "not_blocked" ]; then
+            # If the video is unknown, queue ONLY on strong signals
+            # (navigation). Telemetry URLs do not queue — otherwise the
+            # home feed scroll floods Processing.
+            if [ "$is_strong" = "1" ] && [ "$reason" = "not_blocked" ]; then
                 curl -s --max-time "$CURL_TIMEOUT" \
                     -X POST "${BRAINROT_API}/api/analyze" \
                     -H "Content-Type: application/json" \
