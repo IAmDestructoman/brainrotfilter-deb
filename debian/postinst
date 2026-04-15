@@ -60,6 +60,23 @@ case "$1" in
         # Make the privileged helper script executable
         chmod 0755 /usr/lib/brainrotfilter/scripts/apply_squid_config.sh 2>/dev/null || true
 
+        # Initialize Squid SSL certificate database (needed for SSL bump).
+        # security_file_certgen must run as the proxy user, which requires
+        # the parent /var/lib/squid directory to exist first.
+        if [ ! -d /var/lib/squid/ssl_db ]; then
+            mkdir -p /var/lib/squid
+            chown proxy:proxy /var/lib/squid
+            CERTGEN=""
+            for p in /usr/lib/squid/security_file_certgen \
+                      /usr/lib64/squid/security_file_certgen; do
+                [ -x "$p" ] && CERTGEN="$p" && break
+            done
+            if [ -n "$CERTGEN" ]; then
+                "$CERTGEN" -c -s /var/lib/squid/ssl_db -M 16MB 2>/dev/null || true
+                chown -R proxy:proxy /var/lib/squid/ssl_db 2>/dev/null || true
+            fi
+        fi
+
         # Add brainrotfilter to the proxy group so it can read Squid files
         usermod -aG proxy brainrotfilter 2>/dev/null || true
 
