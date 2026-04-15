@@ -147,10 +147,11 @@ while IFS= read -r line; do
         *youtube.com/watch*|*youtube.com/shorts/*|*youtube.com/embed/*|*youtu.be/*)
             is_playback=1 ;;
         *youtube.com/api/stats/watchtime*)
-            # Only /watchtime is truly tied to the actively-playing video.
-            # /qoe, /playback, /timedtext, /youtubei/v1/player, and
-            # storyboards all fire for home-feed previews as well and
-            # would cause the queue to flood on scroll.
+            is_playback=1 ;;
+        *ytimg.com/sb/*)
+            # Storyboards are fetched when the user navigates to a video
+            # (to enable scrub-preview). They do NOT fire during casual
+            # scroll of the home page, unlike vi/ thumbnails.
             is_playback=1 ;;
     esac
 
