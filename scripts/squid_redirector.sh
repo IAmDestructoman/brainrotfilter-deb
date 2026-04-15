@@ -79,13 +79,14 @@ extract_video_id() {
             _vid="${_url#*docid=}"
             _vid="${_vid%%&*}"
             _vid="${_vid%%#*}"
-            case "$_vid" in *http*|*/*|*=*) _vid="" ;; esac
+            # YouTube video IDs are exactly 11 chars; anything else is a miss.
+            if [ ${#_vid} -ne 11 ]; then _vid=""; fi
             ;;
         *youtube.com/api/timedtext*)
             _vid="${_url#*v=}"
             _vid="${_vid%%&*}"
             _vid="${_vid%%#*}"
-            case "$_vid" in *http*|*/*|*=*) _vid="" ;; esac
+            if [ ${#_vid} -ne 11 ]; then _vid=""; fi
             ;;
         *youtubei/v1/player*|*youtubei/v1/next*)
             case "$_url" in
