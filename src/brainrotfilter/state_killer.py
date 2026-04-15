@@ -142,20 +142,37 @@ def _add_client_block(client_ip: str, duration: int = BLOCK_DURATION_SECONDS) ->
     """
     Insert an iptables INPUT REJECT rule so *client_ip* cannot reconnect to
     the Squid proxy ports.  The rule is recorded with an expiry for cleanup.
-    """
-    comment = f"brainrotfilter-block-{client_ip}"
-    for port in (SQUID_HTTP_PORT, SQUID_HTTPS_PORT):
-        _ipt("-I", "INPUT",
-             "-s", client_ip,
-             "-p", "tcp", "--dport", str(port),
-             "-m", "comment", "--comment", comment,
-             "-j", "REJECT", "--reject-with", "tcp-reset")
 
-    expiry = time.monotonic() + duration
+    Skips adding rules if an active (unexpired) block already exists for this
+    client, and also uses `-C` to avoid duplicate kernel rules from concurrent
+    calls.  The expiry is always refreshed so repeated blocks extend the window.
+    """
+    now = time.monotonic()
+    with _blocks_lock:
+        existing_expiry = _active_blocks.get(client_ip)
+    already_blocked = existing_expiry is not None and now < existing_expiry
+
+    if not already_blocked:
+        comment = f"brainrotfilter-block-{client_ip}"
+        for port in (SQUID_HTTP_PORT, SQUID_HTTPS_PORT):
+            check_args = ["-C", "INPUT",
+                          "-s", client_ip,
+                          "-p", "tcp", "--dport", str(port),
+                          "-m", "comment", "--comment", comment,
+                          "-j", "REJECT", "--reject-with", "tcp-reset"]
+            # -C returns 0 if rule exists; skip add if present
+            if _ipt(*check_args) != 0:
+                _ipt("-I", "INPUT",
+                     "-s", client_ip,
+                     "-p", "tcp", "--dport", str(port),
+                     "-m", "comment", "--comment", comment,
+                     "-j", "REJECT", "--reject-with", "tcp-reset")
+
+    expiry = now + duration
     with _blocks_lock:
         _active_blocks[client_ip] = expiry
     logger.info(
-        "Added iptables block for %s (expires in %ds)", client_ip, duration
+        "iptables block for %s (refreshed, expires in %ds)", client_ip, duration
     )
 
 
