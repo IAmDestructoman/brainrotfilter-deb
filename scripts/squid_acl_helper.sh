@@ -70,6 +70,29 @@ extract_video_id() {
             _vid="${_vid%%/*}"
             _vid="${_vid%%\?*}"
             ;;
+        *youtube.com/api/stats/watchtime*|*youtube.com/api/stats/qoe*|*youtube.com/api/stats/playback*)
+            _vid="${_url#*docid=}"
+            _vid="${_vid%%&*}"
+            _vid="${_vid%%#*}"
+            case "$_vid" in *http*|*/*|*=*) _vid="" ;; esac
+            ;;
+        *youtube.com/api/timedtext*)
+            _vid="${_url#*v=}"
+            _vid="${_vid%%&*}"
+            _vid="${_vid%%#*}"
+            case "$_vid" in *http*|*/*|*=*) _vid="" ;; esac
+            ;;
+        *youtubei/v1/player*|*youtubei/v1/next*)
+            case "$_url" in
+                *videoId=*)
+                    _vid="${_url#*videoId=}"
+                    _vid="${_vid%%&*}"
+                    ;;
+                *)
+                    _vid=""
+                    ;;
+            esac
+            ;;
         *)
             _vid=""
             ;;
