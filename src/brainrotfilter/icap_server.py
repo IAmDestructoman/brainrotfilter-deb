@@ -343,25 +343,62 @@ def _extract_client_ip(http_headers_raw: bytes, icap_headers: Dict[str, str]) ->
 
 # ---------------------------------------------------------------------------
 # Server bootstrap
+#
+# Use a ForkingMixIn alternative: bounded-thread model. stdlib's
+# ThreadingTCPServer spawns unbounded threads; under sustained load
+# (YouTube feed browsing -> 100s of REQMOD/min bursts) that grew thread
+# + fd count until the server responded slowly enough for Squid's ICAP
+# client pool to stall. A small fixed pool with backpressure avoids it.
 # ---------------------------------------------------------------------------
 
-class _ThreadedICAPServer(socketserver.ThreadingTCPServer):
+class _PoolServer(socketserver.TCPServer):
     allow_reuse_address = True
-    daemon_threads = True
+
+    def __init__(self, addr, handler_cls, max_workers: int = 16):
+        super().__init__(addr, handler_cls)
+        from concurrent.futures import ThreadPoolExecutor
+        self._pool = ThreadPoolExecutor(
+            max_workers=max_workers,
+            thread_name_prefix="icap-worker",
+        )
+
+    def process_request(self, request, client_address):
+        # Tight socket timeouts so one slow peer can't starve a worker.
+        try:
+            request.settimeout(15)
+        except Exception:
+            pass
+        self._pool.submit(self._handle_pool, request, client_address)
+
+    def _handle_pool(self, request, client_address):
+        try:
+            self.finish_request(request, client_address)
+        except Exception as exc:
+            _log("WARN", f"pool-worker error: {exc!r}")
+        finally:
+            try:
+                self.shutdown_request(request)
+            except Exception:
+                pass
 
 
 def main() -> None:
+    # Keep the stdlib logging set up for the startup line, but our per-
+    # request logs go through _log() (direct stderr + flush).
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
         stream=sys.stdout,
     )
     logger.info(
-        "BrainrotFilter ICAP starting on %s:%d (api=%s, enforce=%s)",
+        "BrainrotFilter ICAP starting on %s:%d (api=%s, enforce=%s, workers=16)",
         LISTEN_HOST, LISTEN_PORT, BRAINROT_API, ENFORCE,
     )
-    with _ThreadedICAPServer((LISTEN_HOST, LISTEN_PORT), ICAPHandler) as server:
+    server = _PoolServer((LISTEN_HOST, LISTEN_PORT), ICAPHandler, max_workers=16)
+    try:
         server.serve_forever()
+    finally:
+        server.server_close()
 
 
 if __name__ == "__main__":
