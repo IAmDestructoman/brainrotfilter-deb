@@ -1,0 +1,29 @@
+[Unit]
+Description=BrainrotFilter supervisor / auto-restarter
+After=network.target brainrotfilter.service squid.service
+Wants=brainrotfilter.service squid.service
+
+[Service]
+Type=simple
+# Runs as root — needs systemctl restart privileges on managed units.
+User=root
+ExecStart=/usr/bin/python3 /opt/brainrotfilter/src/brainrotfilter/watchdog.py
+Restart=always
+RestartSec=5
+
+Environment=PYTHONUNBUFFERED=1
+Environment=WATCHDOG_INTERVAL=15
+Environment=WATCHDOG_STATUS_FILE=/var/lib/brainrotfilter/system_status.json
+
+# Hardening (still root but reduce blast radius)
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+
+[Install]
+WantedBy=multi-user.target

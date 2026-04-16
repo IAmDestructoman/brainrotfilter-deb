@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block title %}System Status{% endblock %}
+{% block page_title %}System Status{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>System Status</h1>
+    <div class="subtitle" id="status-subtitle">Loading…</div>
+  </div>
+  <button id="btn-refresh" class="btn btn-secondary">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+    </svg>
+    Refresh
+  </button>
+</div>
+
+<div id="services-list" style="display:grid;gap:12px"></div>
+
+<style>
+  .svc-card { padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius);
+              background: var(--bg-card); }
+  .svc-card.healthy { border-left: 3px solid var(--success, #10b981); }
+  .svc-card.unhealthy { border-left: 3px solid var(--danger, #ef4444); }
+  .svc-card .svc-head { display:flex;justify-content:space-between;align-items:center;margin-bottom:6px }
+  .svc-card .svc-title { font-weight:600;font-size:0.95rem }
+  .svc-card .svc-unit { font-family:var(--font-mono);font-size:0.72rem;color:var(--text-dim) }
+  .svc-card .svc-desc { color:var(--text-muted);font-size:0.82rem;margin-bottom:8px }
+  .svc-card .svc-probes { display:flex;flex-wrap:wrap;gap:8px;font-size:0.78rem;margin-bottom:6px }
+  .svc-card .probe { padding:2px 8px;border-radius:10px;background:var(--bg-primary);
+                     border:1px solid var(--border) }
+  .probe.ok { color: var(--success, #10b981); border-color: rgba(16,185,129,0.3) }
+  .probe.bad { color: var(--danger, #ef4444); border-color: rgba(239,68,68,0.4) }
+  .svc-card .errors { margin-top:6px;padding:8px 10px;background:rgba(239,68,68,0.08);
+                       border-radius:4px;font-family:var(--font-mono);font-size:0.72rem;
+                       color:var(--text-muted);white-space:pre-wrap;max-height:80px;overflow:auto }
+  .svc-card .restart-info { margin-top:6px;font-size:0.76rem;color:var(--warning) }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function probe(label, ok) {
+  return `<span class="probe ${ok ? 'ok' : 'bad'}">${label}: ${ok ? 'OK' : 'FAIL'}</span>`;
+}
+
+function renderCard(svc) {
+  const probes = [];
+  if (svc.active !== undefined) probes.push(probe('active', svc.active));
+  if (svc.http_ok !== undefined) probes.push(probe('http', svc.http_ok));
+  if (svc.tcp_ok !== undefined) probes.push(probe('tcp', svc.tcp_ok));
+  if (svc.extra_tcp_ok !== undefined) probes.push(probe('tcp2', svc.extra_tcp_ok));
+
+  let errBlock = '';
+  if (svc.recent_errors && svc.recent_errors.length) {
+    errBlock = `<div class="errors">${BF.escapeHtml(svc.recent_errors.join('\n'))}</div>`;
+  }
+
+  let restartBlock = '';
+  if (svc.restart) {
+    const r = svc.restart;
+    const when = r.at ? new Date(r.at * 1000).toLocaleTimeString() : '';
+    if (r.attempted) {
+      restartBlock = `<div class="restart-info">⟳ restarted at ${when} (exit=${r.exit_code})</div>`;
+    } else {
+      restartBlock = `<div class="restart-info">⚠ restart rate-limited (${r.restarts_last_hour}/h)</div>`;
+    }
+  } else if (svc.restarts_last_hour > 0) {
+    restartBlock = `<div class="restart-info">${svc.restarts_last_hour} restart(s) in the last hour</div>`;
+  }
+
+  return `
+    <div class="svc-card ${svc.healthy ? 'healthy' : 'unhealthy'}">
+      <div class="svc-head">
+        <div>
+          <div class="svc-title">${BF.escapeHtml(svc.name)}</div>
+          <div class="svc-unit">${BF.escapeHtml(svc.unit)}</div>
+        </div>
+        <div class="svc-status ${svc.healthy ? 'ok' : 'bad'}">
+          ${svc.healthy ? '✓ healthy' : '✕ unhealthy'}
+        </div>
+      </div>
+      <div class="svc-desc">${BF.escapeHtml(svc.description || '')}</div>
+      <div class="svc-probes">${probes.join('')}</div>
+      ${restartBlock}
+      ${errBlock}
+    </div>`;
+}
+
+async function refresh() {
+  const subtitle = document.getElementById('status-subtitle');
+  const list = document.getElementById('services-list');
+  try {
+    const data = await BF.fetchJSON('/api/system/status');
+    if (data.error) {
+      subtitle.textContent = 'watchdog not running — install brainrotfilter-watchdog.service';
+      list.innerHTML = '';
+      return;
+    }
+    const age = data.generated_at ? Math.round(Date.now()/1000 - data.generated_at) : -1;
+    subtitle.textContent =
+      `${(data.services || []).length} services monitored · poll every ${data.interval_seconds}s · snapshot ${age}s old`;
+    list.innerHTML = (data.services || []).map(renderCard).join('');
+  } catch (e) {
+    subtitle.textContent = 'Failed to load: ' + e.message;
+  }
+}
+
+document.getElementById('btn-refresh').addEventListener('click', refresh);
+refresh();
+setInterval(refresh, 5000);
+</script>
+{% endblock %}

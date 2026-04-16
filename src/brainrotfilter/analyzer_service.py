@@ -1474,6 +1474,26 @@ async def health() -> Dict[str, Any]:
     }
 
 
+@app.get("/api/system/status")
+async def api_system_status() -> Dict[str, Any]:
+    """Return the watchdog's latest status snapshot (read from disk)."""
+    path = "/var/lib/brainrotfilter/system_status.json"
+    try:
+        with open(path, "r") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {"error": "watchdog_not_running", "services": []}
+    except Exception as exc:
+        return {"error": str(exc), "services": []}
+
+
+@app.get("/status", response_class=HTMLResponse)
+async def system_status_page(request: Request) -> HTMLResponse:
+    """Render the system status admin page."""
+    return _template_response(request, "system_status.html",
+                              {"active_page": "status"})
+
+
 @app.get("/version")
 async def version_info() -> Dict[str, Any]:
     """Return version and build info."""
