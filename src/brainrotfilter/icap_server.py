@@ -175,19 +175,26 @@ class ICAPHandler(socketserver.StreamRequestHandler):
     timeout = 30
 
     def handle(self) -> None:
+        # Squid sends multiple REQMODs on a single TCP connection, so
+        # loop until the peer closes or an unrecoverable error.
         try:
-            self._handle_once()
+            while True:
+                if not self._handle_once():
+                    return
+        except (ConnectionError, OSError):
+            return
         except Exception as exc:
             logger.warning("ICAP handler error: %s", exc, exc_info=False)
 
-    def _handle_once(self) -> None:
+    def _handle_once(self) -> bool:
+        """Return True to continue the session, False to end the connection."""
         req_line = _read_crlf_line(self.rfile)
         if not req_line:
-            return
+            return False
         parts = req_line.split(" ", 2)
         if len(parts) < 3:
             self._send(400, "Bad Request")
-            return
+            return False
         method, uri, _version = parts
         headers = _read_headers(self.rfile)
 
@@ -197,6 +204,8 @@ class ICAPHandler(socketserver.StreamRequestHandler):
             self._handle_reqmod(uri, headers)
         else:
             self._send(405, "Method Not Allowed")
+            return False
+        return True
 
     # ---- OPTIONS --------------------------------------------------------
     def _handle_options(self) -> None:
@@ -259,15 +268,22 @@ class ICAPHandler(socketserver.StreamRequestHandler):
 
     # ---- response helpers ----------------------------------------------
     def _send_204(self) -> None:
-        self.wfile.write(
-            f"{ICAP_VERSION} 204 No Content\r\nEncapsulated: null-body=0\r\n\r\n"
-            .encode("latin-1")
+        resp = (
+            f"{ICAP_VERSION} 204 No Content\r\n"
+            "ISTag: \"brainrot-icap-1\"\r\n"
+            "Encapsulated: null-body=0\r\n"
+            "\r\n"
         )
+        self.wfile.write(resp.encode("latin-1"))
 
     def _send(self, code: int, reason: str) -> None:
-        self.wfile.write(
-            f"{ICAP_VERSION} {code} {reason}\r\n\r\n".encode("latin-1")
+        resp = (
+            f"{ICAP_VERSION} {code} {reason}\r\n"
+            "ISTag: \"brainrot-icap-1\"\r\n"
+            "Connection: close\r\n"
+            "\r\n"
         )
+        self.wfile.write(resp.encode("latin-1"))
 
 
 def _parse_http_request_line(http_headers: bytes) -> Tuple[str, str]:
