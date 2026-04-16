@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from typing import Any, Dict, Optional, Tuple
 
 import httpx
@@ -26,6 +27,12 @@ from fastapi import APIRouter, Request, Response
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# Log-only mode: shim observes + forwards but does NOT call the block/queue
+# pipeline. Lets us capture real /youtubei/v1/(player|next) bodies and tune
+# the click-vs-hover heuristic before enforcement goes live.
+# Override by setting BRAINROT_SHIM_ENFORCE=1 in the service environment.
+_SHIM_ENFORCE = os.environ.get("BRAINROT_SHIM_ENFORCE", "0") == "1"
 
 # Single shared async client; reuses connections + HTTP/2 streams.
 _client: Optional[httpx.AsyncClient] = None
@@ -154,6 +161,39 @@ async def _forward(request: Request, body: bytes, upstream_path: str) -> Respons
     )
 
 
+def _debug_snapshot(body: bytes) -> Dict[str, Any]:
+    """Extract the fields most likely to discriminate click vs hover.
+
+    Dumped in log-only mode so we can correlate against actual user
+    behaviour (hover N cards vs click-to-watch) and pick the right
+    heuristic for enforcement mode.
+    """
+    snap: Dict[str, Any] = {}
+    try:
+        data = json.loads(body)
+    except Exception:
+        return {"parse_error": True, "body_len": len(body)}
+
+    ctx = (data.get("context") or {})
+    client = (ctx.get("client") or {})
+    pc = (data.get("playbackContext") or {})
+    cpc = (pc.get("contentPlaybackContext") or {})
+
+    snap["clientName"] = client.get("clientName")
+    snap["clientVersion"] = client.get("clientVersion")
+    snap["videoId"] = data.get("videoId")
+    snap["contentCheckOk"] = data.get("contentCheckOk")
+    snap["racyCheckOk"] = data.get("racyCheckOk")
+    snap["currentUrl"] = cpc.get("currentUrl")
+    snap["autoplay"] = cpc.get("autoplay")
+    snap["autonavState"] = cpc.get("autonavState")
+    snap["referer"] = cpc.get("referer")
+    snap["signatureTimestamp"] = cpc.get("signatureTimestamp")
+    # Any top-level keys we may not know about
+    snap["top_keys"] = list(data.keys())
+    return snap
+
+
 async def _handle(request: Request, upstream_path: str) -> Response:
     body = await request.body()
     video_id, intent = _parse_body(body)
@@ -165,11 +205,25 @@ async def _handle(request: Request, upstream_path: str) -> Response:
     elif request.client:
         client_ip = request.client.host or ""
 
+    mode = "enforce" if _SHIM_ENFORCE else "log-only"
     logger.info(
-        "shim %s: video_id=%s intent=%s client=%s",
-        upstream_path, video_id or "?", intent, client_ip or "?",
+        "shim %s [%s]: video_id=%s intent=%s client=%s",
+        upstream_path, mode, video_id or "?", intent, client_ip or "?",
     )
-    _register_decision(video_id or "", client_ip, intent)
+
+    # In log-only mode, dump a structured snapshot of the discriminator
+    # fields for offline analysis. Do this BEFORE forwarding so a slow
+    # upstream does not bury the data.
+    if not _SHIM_ENFORCE:
+        try:
+            logger.info("shim-snapshot %s %s %s",
+                        upstream_path, client_ip or "?",
+                        json.dumps(_debug_snapshot(body), default=str))
+        except Exception as exc:
+            logger.warning("snapshot failed: %s", exc)
+
+    if _SHIM_ENFORCE:
+        _register_decision(video_id or "", client_ip, intent)
 
     return await _forward(request, body, upstream_path)
 
