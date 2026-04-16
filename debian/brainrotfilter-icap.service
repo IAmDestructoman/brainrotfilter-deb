@@ -1,0 +1,31 @@
+[Unit]
+Description=BrainrotFilter ICAP inspection service
+After=network.target brainrotfilter.service
+Wants=brainrotfilter.service
+
+[Service]
+Type=simple
+User=brainrotfilter
+Group=brainrotfilter
+WorkingDirectory=/opt/brainrotfilter
+ExecStart=/opt/brainrotfilter/venv/bin/python /opt/brainrotfilter/src/brainrotfilter/icap_server.py
+Restart=on-failure
+RestartSec=3
+
+Environment=PYTHONUNBUFFERED=1
+Environment=BRAINROT_API=http://127.0.0.1:8199
+Environment=BRAINROT_ICAP_HOST=127.0.0.1
+Environment=BRAINROT_ICAP_PORT=1344
+# Flip to 1 to enable block/queue enforcement (default: log-only)
+Environment=BRAINROT_SHIM_ENFORCE=0
+
+# Hardening
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+ReadOnlyPaths=/
+ReadWritePaths=/var/log /run
+
+[Install]
+WantedBy=multi-user.target
