@@ -185,16 +185,16 @@ class ICAPHandler(socketserver.StreamRequestHandler):
     timeout = 30
 
     def handle(self) -> None:
-        # Squid sends multiple REQMODs on a single TCP connection, so
-        # loop until the peer closes or an unrecoverable error.
+        # One request per connection, with an explicit Connection: close
+        # in responses so Squid opens a fresh TCP for each REQMOD. Looping
+        # within the connection required bidirectional close signalling
+        # that added too many edge cases and interfered with Squid pooling.
         try:
-            while True:
-                if not self._handle_once():
-                    return
+            self._handle_once()
         except (ConnectionError, OSError):
-            return
+            pass
         except Exception as exc:
-            logger.warning("ICAP handler error: %s", exc, exc_info=False)
+            _log("WARN", f"ICAP handler error: {exc!r}")
 
     def _handle_once(self) -> bool:
         """Return True to continue the session, False to end the connection."""
@@ -299,6 +299,7 @@ class ICAPHandler(socketserver.StreamRequestHandler):
         resp = (
             f"{ICAP_VERSION} 204 No Content\r\n"
             "ISTag: \"brainrot-icap-1\"\r\n"
+            "Connection: close\r\n"
             "Encapsulated: null-body=0\r\n"
             "\r\n"
         )
