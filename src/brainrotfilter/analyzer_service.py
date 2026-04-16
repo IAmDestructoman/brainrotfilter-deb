@@ -876,9 +876,15 @@ async def api_check(req: CheckRequest) -> CheckResponse:
         status = db.get_video_status(vid)
         if status == "block":
             _log_client(video_id=vid, action="block")
-            # Refresh this client's block entry for this video_id; entries
-            # auto-expire when the blocked video stops being identified.
-            if req.client_ip:
+            # Only actual navigation URLs (watch/shorts/embed/youtu.be)
+            # or an already-existing block get to set/refresh the CDN
+            # block. Stats URLs and storyboards for a blocked video can
+            # fire from home-feed previews the user isn't actually on;
+            # those should not re-engage the block if we already cleared
+            # it.
+            src = (req.source or "navigation").lower()
+            already_blocked = _is_client_cdn_blocked(req.client_ip or "")
+            if req.client_ip and (src == "navigation" or already_blocked):
                 _block_client_cdn(req.client_ip, video_id=vid)
             return CheckResponse(
                 action="block",

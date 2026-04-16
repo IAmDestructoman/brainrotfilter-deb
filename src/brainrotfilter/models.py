@@ -361,6 +361,10 @@ class CheckRequest(BaseModel):
     video_id: Optional[str] = None
     channel_id: Optional[str] = None
     client_ip: Optional[str] = None  # Requesting client IP (for state killer tracking)
+    # URL-class hint so the API can decide whether to set or merely
+    # refresh block state. Values: "navigation", "stats", "storyboard",
+    # "other". Absent for legacy callers — treated as "navigation".
+    source: Optional[str] = None
 
 
 class CheckResponse(BaseModel):

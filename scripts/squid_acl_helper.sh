@@ -178,11 +178,25 @@ while IFS= read -r line; do
         continue
     fi
 
+    # Classify URL source so the API can decide whether to set or merely
+    # refresh a block entry. Stats/storyboard hits for a blocked video
+    # should NOT create new blocks — only refresh an existing one. Only
+    # actual navigation (watch URL) should engage the block.
+    url_source="other"
+    case "$url" in
+        *youtube.com/watch*|*youtube.com/shorts/*|*youtube.com/embed/*|*youtu.be/*)
+            url_source="navigation" ;;
+        *youtube.com/api/stats/watchtime*|*youtube.com/api/stats/qoe*|*youtube.com/api/stats/playback*)
+            url_source="stats" ;;
+        *ytimg.com/sb/*)
+            url_source="storyboard" ;;
+    esac
+
     # Build JSON body — include client_ip when available
     if [ -n "$src_ip" ]; then
-        json_body="{\"video_id\":\"${video_id}\",\"client_ip\":\"${src_ip}\"}"
+        json_body="{\"video_id\":\"${video_id}\",\"client_ip\":\"${src_ip}\",\"source\":\"${url_source}\"}"
     else
-        json_body="{\"video_id\":\"${video_id}\"}"
+        json_body="{\"video_id\":\"${video_id}\",\"source\":\"${url_source}\"}"
     fi
 
     # Call the BrainrotFilter API
