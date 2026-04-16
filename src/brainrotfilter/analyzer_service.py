@@ -649,6 +649,7 @@ for _mod_name, _route_prefix in [
     ("ml_routes", "/api/ml"),
     ("community_routes", "/api/community"),
     ("uninstall_routes", "/uninstall"),
+    ("youtubei_shim", "/shim/youtubei/v1"),
 ]:
     try:
         import importlib as _importlib

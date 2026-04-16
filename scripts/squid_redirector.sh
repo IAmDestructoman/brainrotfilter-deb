@@ -128,6 +128,18 @@ while IFS= read -r line; do
     client_info="${rest%% *}"
     client_ip="${client_info%%/*}"
 
+    # --- /youtubei/v1/(player|next) shim ---------------------------------
+    # Rewrite these POSTs to our local shim so it can peek the body,
+    # extract videoId + click/hover intent, and do the block/queue.
+    case "$url" in
+        *youtube.com/youtubei/v1/player*|*youtube.com/youtubei/v1/next*)
+            # Preserve query string; swap host+path to shim endpoint.
+            _path="${url#*youtube.com}"
+            echo "${id} OK rewrite-url=${BRAINROT_API}/shim${_path}"
+            continue
+            ;;
+    esac
+
     # Extract video ID
     video_id=$(extract_video_id "$url")
 

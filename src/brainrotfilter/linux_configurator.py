@@ -273,7 +273,7 @@ ssl_bump splice all
 # Narrow to active-playback URLs only, via a url_regex pre-filter. Without
 # this the redirector is invoked for every thumbnail / feed API / telemetry
 # request, which swamps the helper pool and stalls the home page.
-acl brainrot_rewrite_url url_regex -i youtube\\.com/watch youtube\\.com/shorts/ youtube\\.com/embed/ youtu\\.be/ youtube\\.com/api/stats/watchtime youtube\\.com/api/stats/qoe youtube\\.com/api/stats/playback ytimg\\.com/sb/
+acl brainrot_rewrite_url url_regex -i youtube\\.com/watch youtube\\.com/shorts/ youtube\\.com/embed/ youtu\\.be/ youtube\\.com/api/stats/watchtime youtube\\.com/api/stats/qoe youtube\\.com/api/stats/playback youtube\\.com/youtubei/v1/player youtube\\.com/youtubei/v1/next ytimg\\.com/sb/
 url_rewrite_program {SCRIPTS_DIR}/squid_redirector.sh
 url_rewrite_children 20 startup=3 idle=1 concurrency=0
 url_rewrite_access allow brainrot_rewrite_url
