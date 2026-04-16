@@ -286,7 +286,13 @@ IDENTIFY_STALE_SECONDS = 180
 # longer accidentally unblock the player.
 _cdn_blocked_clients: Dict[str, Dict[str, float]] = {}  # ip -> {video_id: expiry}
 _cdn_block_lock = threading.Lock()
-CDN_BLOCK_ENTRY_TTL = 90  # seconds — must be > stats URL interval (~30s)
+CDN_BLOCK_ENTRY_TTL = 40  # seconds — slightly > player's ~30s stats interval.
+#   Short enough that once a user navigates away, the block evaporates
+#   within tens of seconds (no prolonged lockout of unrelated YouTube
+#   browsing). While the user is still on the blocked video, every
+#   denied stats URL re-hits /api/check and refreshes the entry back
+#   to full TTL so playback stays blocked. /api/check returning allow
+#   for a DIFFERENT video also clears the set immediately.
 
 
 def _block_client_cdn(client_ip: str, video_id: str = "", duration: int = CDN_BLOCK_ENTRY_TTL) -> None:
@@ -888,6 +894,13 @@ async def api_check(req: CheckRequest) -> CheckResponse:
                 redirect_url=f"http://{service_host}:{port}/warning?video_id={vid}",
                 reason="soft_blocked",
             )
+
+        # Known-allowed video (not blocked, not soft_blocked, not pending).
+        # If the client has block entries for OTHER videos, clear them —
+        # they've navigated to allowed content so their CDN should unblock
+        # immediately without waiting for the TTL.
+        if req.client_ip:
+            _unblock_client_cdn(req.client_ip)
 
     if req.channel_id:
         ch = req.channel_id.strip()
