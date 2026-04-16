@@ -258,9 +258,27 @@ class ICAPHandler(socketserver.StreamRequestHandler):
             body = _read_chunked_icap_body(self.rfile)
 
         if is_target:
-            _log("INFO", f"REQMOD hit: url={http_url} body_len={len(body)}")
+            # Check for compression/binary encoding
+            body_head = body[:32] if body else b""
+            content_encoding = ""
+            for line in http_headers.decode("latin-1", errors="replace").split("\r\n"):
+                if line.lower().startswith("content-encoding:"):
+                    content_encoding = line.partition(":")[2].strip().lower()
+                    break
+            _log("INFO", f"REQMOD hit: url={http_url} body_len={len(body)} encoding={content_encoding!r} head={body_head!r}")
+
+            # Try to decompress if needed
+            raw = body
+            if content_encoding == "gzip":
+                try:
+                    import gzip
+                    raw = gzip.decompress(body)
+                    _log("INFO", f"gunzipped to {len(raw)} bytes, head={raw[:64]!r}")
+                except Exception as exc:
+                    _log("WARN", f"gunzip failed: {exc}")
+
             client_ip = _extract_client_ip(http_headers, headers)
-            data = _parse_json_body(body) if body else None
+            data = _parse_json_body(raw) if raw else None
             if data is not None:
                 snap = _extract_snapshot(http_url, data)
                 intent = _guess_intent(snap)
