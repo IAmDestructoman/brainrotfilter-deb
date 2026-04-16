@@ -122,6 +122,9 @@ def _register_decision(video_id: str, client_ip: str, intent: str) -> None:
         logger.warning("shim decision pipeline failed: %s", exc)
 
 
+import time
+
+
 async def _forward(request: Request, body: bytes, upstream_path: str) -> Response:
     """Forward the request to www.youtube.com and stream back."""
     client = await _get_client()
@@ -129,11 +132,26 @@ async def _forward(request: Request, body: bytes, upstream_path: str) -> Respons
     if request.url.query:
         upstream_url += f"?{request.url.query}"
 
+    # Headers that we know YouTube dislikes when replayed from a proxy.
+    # Strip them — httpx will set correct values from the body + client.
+    _STRIP_EXTRA = {
+        "content-length", "content-encoding", "transfer-encoding",
+        "accept-encoding", "expect",
+    }
+
     fwd_headers = {
         k: v for k, v in request.headers.items()
-        if k.lower() not in _HOP_BY_HOP
+        if k.lower() not in _HOP_BY_HOP and k.lower() not in _STRIP_EXTRA
     }
     fwd_headers["host"] = "www.youtube.com"
+
+    logger.info(
+        "shim->upstream %s body=%d hdrs=%d ua=%r origin=%r",
+        upstream_url, len(body), len(fwd_headers),
+        (fwd_headers.get("user-agent") or "")[:40],
+        fwd_headers.get("origin"),
+    )
+    started = time.monotonic()
 
     try:
         upstream = await client.request(
@@ -142,16 +160,30 @@ async def _forward(request: Request, body: bytes, upstream_path: str) -> Respons
             content=body,
             headers=fwd_headers,
         )
-    except httpx.TimeoutException:
-        logger.warning("shim upstream timeout: %s", upstream_url)
+    except httpx.TimeoutException as exc:
+        elapsed = time.monotonic() - started
+        logger.warning("shim upstream timeout after %.2fs %s (%s)",
+                       elapsed, upstream_url, exc)
         return Response("Upstream timeout", status_code=504)
     except httpx.HTTPError as exc:
-        logger.warning("shim upstream error %s: %s", upstream_url, exc)
+        elapsed = time.monotonic() - started
+        logger.warning("shim upstream error after %.2fs %s: %s",
+                       elapsed, upstream_url, exc)
         return Response("Upstream error", status_code=502)
 
+    elapsed = time.monotonic() - started
+    logger.info("shim<-upstream %s %d bytes=%d in %.2fs",
+                upstream_url, upstream.status_code,
+                len(upstream.content), elapsed)
+
+    # Strip response headers that would break re-serving: content-encoding
+    # (httpx already decompressed), transfer-encoding (response is not
+    # chunked anymore), content-length (we send the decoded bytes; FastAPI
+    # will set it correctly).
+    _STRIP_RESP = _HOP_BY_HOP | {"content-encoding", "content-length"}
     resp_headers = {
         k: v for k, v in upstream.headers.items()
-        if k.lower() not in _HOP_BY_HOP
+        if k.lower() not in _STRIP_RESP
     }
     return Response(
         content=upstream.content,
