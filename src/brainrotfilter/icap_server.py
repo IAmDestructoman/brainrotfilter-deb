@@ -30,6 +30,16 @@ from typing import Any, Dict, Optional, Tuple
 
 logger = logging.getLogger("brainrot-icap")
 
+
+def _log(level: str, msg: str) -> None:
+    """Write a log line directly to stderr and flush. Python's logging under
+    systemd + ThreadingTCPServer was buffering worker-thread log records for
+    minutes at a time; direct stderr with flush avoids that class of bug."""
+    import datetime
+    ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    sys.stderr.write(f"{ts} {level} brainrot-icap: {msg}\n")
+    sys.stderr.flush()
+
 BRAINROT_API = os.environ.get("BRAINROT_API", "http://127.0.0.1:8199")
 ENFORCE = os.environ.get("BRAINROT_SHIM_ENFORCE", "0") == "1"
 LISTEN_HOST = os.environ.get("BRAINROT_ICAP_HOST", "127.0.0.1")
@@ -227,6 +237,7 @@ class ICAPHandler(socketserver.StreamRequestHandler):
 
     # ---- REQMOD ---------------------------------------------------------
     def _handle_reqmod(self, uri: str, headers: Dict[str, str]) -> None:
+        _log("DEBUG", f"REQMOD uri={uri} hdrs={list(headers.keys())}")
         enc = _parse_encapsulated(headers.get("encapsulated", ""))
         body_key = "req-body" if "req-body" in enc else "null-body"
         hdr_end = enc.get(body_key, 0)
@@ -246,22 +257,21 @@ class ICAPHandler(socketserver.StreamRequestHandler):
         if body_key == "req-body":
             body = _read_chunked_icap_body(self.rfile)
 
-        if is_target and body:
+        if is_target:
+            _log("INFO", f"REQMOD hit: url={http_url} body_len={len(body)}")
             client_ip = _extract_client_ip(http_headers, headers)
-            data = _parse_json_body(body)
+            data = _parse_json_body(body) if body else None
             if data is not None:
                 snap = _extract_snapshot(http_url, data)
                 intent = _guess_intent(snap)
                 mode = "enforce" if ENFORCE else "log-only"
-                logger.info(
-                    "icap-snapshot [%s] intent=%s client=%s %s",
-                    mode, intent, client_ip or "?",
-                    json.dumps(snap, default=str),
-                )
+                _log("INFO", f"icap-snapshot [{mode}] intent={intent} client={client_ip or '?'} {json.dumps(snap, default=str)}")
                 if ENFORCE:
                     vid = snap.get("videoId")
                     if isinstance(vid, str) and len(vid) == 11:
                         _register_decision(vid, client_ip or "", intent)
+            else:
+                _log("INFO", f"body was empty or not JSON, url={http_url}")
 
         # Always return 204 — we never modify the request, just observe.
         self._send_204()
