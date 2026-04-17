@@ -318,17 +318,196 @@ def action_system_status() -> None:
     pause()
 
 
+def _list_physical_nics() -> List[Dict[str, str]]:
+    """Enumerate physical ethernet NICs with state, carrier, speed, addr, MAC."""
+    out: List[Dict[str, str]] = []
+    r = _run(["ls", "/sys/class/net"])
+    names = (r.stdout or "").split()
+    for n in sorted(names):
+        if n == "lo" or n.startswith(("br", "veth", "docker", "tun", "tap", "wg", "virbr")):
+            continue
+        # Must have a device (excludes pure virtual).
+        rc = _run(["test", "-e", f"/sys/class/net/{n}/device"])
+        if rc.returncode != 0:
+            continue
+
+        info: Dict[str, str] = {"name": n, "state": "?", "carrier": "?",
+                                "speed": "?", "addr": "", "mac": ""}
+        try:
+            with open(f"/sys/class/net/{n}/operstate") as f:
+                info["state"] = f.read().strip()
+        except Exception:
+            pass
+        try:
+            with open(f"/sys/class/net/{n}/carrier") as f:
+                info["carrier"] = "up" if f.read().strip() == "1" else "down"
+        except Exception:
+            info["carrier"] = "down"
+        try:
+            with open(f"/sys/class/net/{n}/speed") as f:
+                s = f.read().strip()
+                info["speed"] = f"{s}Mb" if s and s != "-1" else "-"
+        except Exception:
+            info["speed"] = "-"
+        try:
+            with open(f"/sys/class/net/{n}/address") as f:
+                info["mac"] = f.read().strip()
+        except Exception:
+            pass
+        # IPv4 address
+        ra = _run(["ip", "-4", "-o", "addr", "show", "dev", n])
+        for line in (ra.stdout or "").splitlines():
+            parts = line.split()
+            if "inet" in parts:
+                i = parts.index("inet")
+                if i + 1 < len(parts):
+                    info["addr"] = parts[i + 1]
+                    break
+        out.append(info)
+    return out
+
+
+def _tui_create_bridge(nics: List[Dict[str, str]]) -> None:
+    if len(nics) < 2:
+        print(f"  {RED}Need at least 2 physical NICs to create a bridge.{RESET}")
+        return
+    print()
+    for i, n in enumerate(nics, 1):
+        carrier = f"{GREEN}up{RESET}" if n["carrier"] == "up" else f"{YELLOW}down{RESET}"
+        print(f"    {i}) {n['name']:<12}  link={carrier}  addr={n['addr'] or '-'}")
+    print()
+    try:
+        picks = input("  NICs for br0 (comma-separated numbers, e.g. 1,2): ").strip()
+    except EOFError:
+        return
+    try:
+        indices = [int(p.strip()) - 1 for p in picks.split(",") if p.strip()]
+    except ValueError:
+        print(f"  {RED}Invalid selection.{RESET}")
+        return
+    if len(indices) < 2 or any(i < 0 or i >= len(nics) for i in indices):
+        print(f"  {RED}Pick at least 2 valid NICs.{RESET}")
+        return
+    members = [nics[i]["name"] for i in indices]
+    print(f"\n  Will create br0 across: {', '.join(members)}")
+    print("  br0 will DHCP on the combined L2 segment.")
+    if not confirm("Create bridge?"):
+        return
+
+    # Write systemd-networkd config. 20-brainrot-bridge-members.network
+    # enumerates the chosen members explicitly (not a wildcard), so a 3rd
+    # NIC that might be plugged in later won't get pulled in by accident.
+    netdev = (
+        "[NetDev]\nName=br0\nKind=bridge\n\n"
+        "[Bridge]\nSTP=no\nForwardDelay=0\n"
+    )
+    match_names = " ".join(members)
+    members_net = (
+        f"[Match]\nName={match_names}\nType=ether\n\n"
+        "[Network]\nBridge=br0\n"
+    )
+    br0_net = (
+        "[Match]\nName=br0\n\n"
+        "[Network]\nDHCP=ipv4\nLinkLocalAddressing=ipv6\n"
+    )
+    for path, content in (
+        ("/etc/systemd/network/10-brainrot-br0.netdev", netdev),
+        ("/etc/systemd/network/20-brainrot-bridge-members.network", members_net),
+        ("/etc/systemd/network/30-brainrot-br0.network", br0_net),
+    ):
+        p = subprocess.run(_sudo(["tee", path]), input=content,
+                           capture_output=True, text=True)
+        if p.returncode != 0:
+            print(f"  {RED}Failed to write {path}: {p.stderr.strip()}{RESET}")
+            return
+
+    # Remove the firstboot DHCP-all netplan so it can't fight with br0.
+    _run(["rm", "-f", "/etc/netplan/00-brainrot-firstboot.yaml"], sudo=True)
+
+    print("  Applying...")
+    _run(["netplan", "apply"], timeout=20, sudo=True)
+    _run(["networkctl", "reload"], timeout=10, sudo=True)
+    _run(["networkctl", "reconfigure", "br0"], timeout=10, sudo=True)
+    print(f"  {GREEN}br0 created. It may take a moment to DHCP.{RESET}")
+
+
+def _tui_destroy_bridge() -> None:
+    r = _run(["ip", "link", "show", "dev", BRIDGE_IFACE])
+    if r.returncode != 0:
+        print(f"  {YELLOW}br0 does not exist.{RESET}")
+        return
+    if not confirm("Destroy br0? All traffic through the bridge will drop"):
+        return
+    # Remove our systemd-networkd files + any legacy netplan bridge yaml.
+    for path in (
+        "/etc/systemd/network/10-brainrot-br0.netdev",
+        "/etc/systemd/network/20-brainrot-bridge-members.network",
+        "/etc/systemd/network/30-brainrot-br0.network",
+        "/etc/netplan/99-brainrotfilter-bridge.yaml",
+    ):
+        _run(["rm", "-f", path], sudo=True)
+    _run(["ip", "link", "set", "br0", "down"], sudo=True)
+    _run(["ip", "link", "del", "br0"], sudo=True)
+    _run(["networkctl", "reload"], sudo=True)
+    print(f"  {GREEN}br0 destroyed. Physical NICs will DHCP independently "
+          f"again after reload.{RESET}")
+
+
 def action_assign_interfaces() -> None:
     """1) Assign Interfaces"""
-    clear_screen()
-    mgmt_ip = get_management_ip()
-    print(f"\n{BOLD}  === Assign Interfaces ==={RESET}\n")
-    print(f"  Interface assignment is managed through the web UI.")
-    print(f"  Open a browser and navigate to:\n")
-    print(f"    {BOLD}{_format_web_url(mgmt_ip)}{RESET}\n")
-    print(f"  The setup wizard will guide you through WAN/LAN NIC selection")
-    print(f"  and bridge configuration.")
-    pause()
+    while True:
+        clear_screen()
+        print(f"\n{BOLD}  === Network Interfaces ==={RESET}\n")
+
+        nics = _list_physical_nics()
+        if not nics:
+            print(f"  {YELLOW}No physical ethernet interfaces detected.{RESET}")
+            pause()
+            return
+
+        print(f"  {'NAME':<12} {'STATE':<8} {'LINK':<6} {'SPEED':<8} {'ADDRESS':<18} MAC")
+        print(f"  {'-' * 70}")
+        for n in nics:
+            carrier_col = GREEN if n["carrier"] == "up" else YELLOW
+            addr = n["addr"] or "-"
+            print(f"  {n['name']:<12} {n['state']:<8} "
+                  f"{carrier_col}{n['carrier']:<6}{RESET} "
+                  f"{n['speed']:<8} {addr:<18} {n['mac']}")
+
+        br_state, br_members = get_bridge_info()
+        print()
+        if br_members:
+            print(f"  Bridge {BRIDGE_IFACE}: {_state_color(br_state.lower())}  "
+                  f"members: {', '.join(br_members)}")
+        else:
+            print(f"  Bridge {BRIDGE_IFACE}: {_state_color(br_state.lower())}  "
+                  f"(not configured)")
+
+        print()
+        print("    1) Create bridge (br0) from 2+ NICs")
+        print("    2) Destroy bridge (br0)")
+        print("    3) Refresh")
+        print("    0) Back to main menu")
+        print()
+
+        try:
+            choice = input("  Select: ").strip()
+        except EOFError:
+            return
+
+        if choice == "0" or choice == "":
+            return
+        if choice == "1":
+            _tui_create_bridge(nics)
+            pause()
+        elif choice == "2":
+            _tui_destroy_bridge()
+            pause()
+        elif choice == "3":
+            continue
+        else:
+            print(f"  {RED}Invalid selection.{RESET}")
+            pause()
 
 
 def action_set_management_ip() -> None:
@@ -356,12 +535,11 @@ def action_set_management_ip() -> None:
         pause()
         return
 
-    # Determine whether br0 already exists; if so, rewrite its
-    # systemd-networkd .network file in place rather than going through
-    # netplan. Avoids:
-    #   - netplan+systemd-networkd file priority races
-    #   - losing the bridge member list (wildcard from firstboot config)
-    #   - the YAML indentation bug from earlier builds
+    # Determine which interface to configure. On a fresh appliance the
+    # wizard hasn't run yet so br0 doesn't exist — we configure whichever
+    # physical NIC currently owns the default route (the DHCP'd one).
+    # Once the wizard has created br0, the default route lives on br0
+    # and we configure that.
     iface = BRIDGE_IFACE
     is_bridge = False
     r = _run(["ip", "-d", "link", "show", "dev", BRIDGE_IFACE])
@@ -372,6 +550,30 @@ def action_set_management_ip() -> None:
         if r2.returncode == 0 and "dev" in r2.stdout:
             parts = r2.stdout.strip().split()
             iface = parts[parts.index("dev") + 1]
+        else:
+            # No default route and no br0 — enumerate physical NICs and
+            # prompt the operator.
+            r3 = _run(["ls", "/sys/class/net"])
+            cands = []
+            for n in (r3.stdout or "").split():
+                if n in ("lo",) or n.startswith(("br", "veth", "docker", "tun", "tap", "wg", "virbr")):
+                    continue
+                cands.append(n)
+            if len(cands) == 1:
+                iface = cands[0]
+            elif cands:
+                print("  Physical interfaces detected:")
+                for i, n in enumerate(cands, 1):
+                    print(f"    {i}) {n}")
+                try:
+                    pick = input("  Pick interface number to configure: ").strip()
+                    idx = int(pick) - 1
+                    if 0 <= idx < len(cands):
+                        iface = cands[idx]
+                except (EOFError, ValueError):
+                    print("  Cancelled.")
+                    pause()
+                    return
 
     # Build a systemd-networkd .network file (INI format).
     lines = [
@@ -559,14 +761,20 @@ def action_toggle_ssh() -> None:
         fp = get_ssh_fingerprints()
         print(f"  Host fingerprint: {fp}\n")
         if confirm("Disable SSH?"):
-            r = _run(["systemctl", "disable", "--now", "ssh"], sudo=True)
+            _run(["systemctl", "disable", "--now", "ssh.service"], sudo=True)
+            # Mask again so the ssh.socket unit can't activate it either —
+            # matches the default appliance state from the harden hook.
+            r = _run(["systemctl", "mask", "ssh.service", "ssh.socket"], sudo=True)
             if r.returncode == 0:
                 print(f"  {GREEN}SSH disabled.{RESET}")
             else:
                 print(f"  {RED}Failed: {r.stderr.strip()}{RESET}")
     else:
         if confirm("Enable SSH?"):
-            r = _run(["systemctl", "enable", "--now", "ssh"], sudo=True)
+            # Harden hook masks ssh.service + ssh.socket at build time;
+            # enable --now on a masked unit fails. Unmask first.
+            _run(["systemctl", "unmask", "ssh.service", "ssh.socket"], sudo=True)
+            r = _run(["systemctl", "enable", "--now", "ssh.service"], sudo=True)
             if r.returncode == 0:
                 print(f"  {GREEN}SSH enabled.{RESET}")
                 fp = get_ssh_fingerprints()

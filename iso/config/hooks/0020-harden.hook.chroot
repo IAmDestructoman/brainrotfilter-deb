@@ -75,6 +75,11 @@ EOF
 # Ensure SSH is OFF at first boot (TUI option 7 enables it)
 systemctl disable ssh.service 2>/dev/null || true
 systemctl mask ssh.service 2>/dev/null || true
+# Also mask the socket unit — enabled by default on Ubuntu and prints
+# "[FAILED] Failed to listen on ssh.socket" at boot otherwise because
+# the backing ssh.service is masked.
+systemctl disable ssh.socket 2>/dev/null || true
+systemctl mask ssh.socket 2>/dev/null || true
 
 # Switch getty@tty1 to auto-login to brainrot TUI
 mkdir -p /etc/systemd/system/getty@tty1.service.d
@@ -158,55 +163,39 @@ fi
 # already reboot the box and factory-reset via snapper, so unrestricted
 # NOPASSWD here is the correct threat model (matches pfSense / OPNsense /
 # Untangle appliances).
-# First-boot default: an unfiltered L2 bridge (br0) of every physical
-# ethernet, DHCP on br0. Lets the operator reach the admin panel from
-# either side of the appliance before the wizard configures per-side
-# interception.
-#
-# Done as pure systemd-networkd static config — a one-shot service that
-# writes netplan then runs `netplan apply` Before= network-pre.target
-# deadlocks against networkd's own start. systemd-networkd reads these
-# files at startup; when the wizard runs it writes its own netplan
-# config AND deletes these three files (configure_bridge() in
-# linux_configurator.py), so there's no conflict on the permanent bridge.
-install -d -m 755 /etc/systemd/network
+# First-boot default: DHCP every physical ethernet INDEPENDENTLY. No
+# bridge yet — the wizard asks the operator to confirm which NICs go
+# into the bridge (critical for appliances with 3+ NICs where the
+# correct pairing isn't obvious). This also keeps the admin panel
+# reachable regardless of NIC count: whichever NIC is plugged into an
+# upstream DHCP server gets an IP, and the dashboard lives on it.
+install -d -m 755 /etc/systemd/network /etc/netplan
 
-cat > /etc/systemd/network/10-brainrot-br0.netdev <<'EOF'
-# BrainrotFilter first-boot bridge.
-[NetDev]
-Name=br0
-Kind=bridge
-
-[Bridge]
-STP=no
-ForwardDelay=0
+cat > /etc/netplan/00-brainrot-firstboot.yaml <<'EOF'
+# BrainrotFilter first-boot default — DHCP on every physical ethernet.
+# Removed by the wizard's configure_bridge() when the operator picks a
+# bridge config. Without this file present on first boot, the machine
+# has no IP and the admin panel is unreachable.
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    all-en:
+      match:
+        name: "en*"
+      dhcp4: true
+      dhcp6: false
+      optional: true
+    all-eth:
+      match:
+        name: "eth*"
+      dhcp4: true
+      dhcp6: false
+      optional: true
 EOF
+chmod 600 /etc/netplan/00-brainrot-firstboot.yaml
 
-cat > /etc/systemd/network/20-brainrot-bridge-members.network <<'EOF'
-# Enslave every physical ethernet to br0.
-[Match]
-Name=en* eth*
-Type=ether
-
-[Network]
-Bridge=br0
-EOF
-
-cat > /etc/systemd/network/30-brainrot-br0.network <<'EOF'
-# DHCP on the bridge itself.
-[Match]
-Name=br0
-
-[Network]
-DHCP=ipv4
-LinkLocalAddressing=ipv6
-EOF
-
-chmod 644 /etc/systemd/network/10-brainrot-br0.netdev \
-          /etc/systemd/network/20-brainrot-bridge-members.network \
-          /etc/systemd/network/30-brainrot-br0.network
-
-# Make sure systemd-networkd is enabled; the bridge won't come up without it.
+# Make sure systemd-networkd is enabled; netplan targets it.
 systemctl enable systemd-networkd.service 2>/dev/null || true
 
 install -d -m 755 /etc/sudoers.d
