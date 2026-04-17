@@ -166,6 +166,13 @@ chroot "$MNT" update-grub 2>&1 | tail -3
 # -- Installed system doesn't need the live-only firstboot netplan --
 chroot "$MNT" rm -f /etc/netplan/00-brainrot-firstboot.yaml
 
+# -- Wipe any SSH host keys so each installed appliance gets its own.
+# The live session may have generated keys when the operator enabled
+# SSH for setup/debugging; carrying them to the installed disk would
+# reuse the same fingerprint across every install. sshd regenerates
+# on first enable (TUI option 7 runs ssh-keygen -A).
+rm -f "$MNT"/etc/ssh/ssh_host_*_key "$MNT"/etc/ssh/ssh_host_*_key.pub
+
 # -- Unmount cleanly --
 echo "Unmounting..."
 for d in run sys proc dev/pts dev; do

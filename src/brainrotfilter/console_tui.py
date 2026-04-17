@@ -761,8 +761,9 @@ def action_toggle_ssh() -> None:
         fp = get_ssh_fingerprints()
         print(f"  Host fingerprint: {fp}\n")
         if confirm("Disable SSH?"):
-            _run(["systemctl", "disable", "--now", "ssh.service"], sudo=True)
-            # Mask again so the ssh.socket unit can't activate it either —
+            _run(["systemctl", "stop", "ssh.service", "ssh.socket"], sudo=True)
+            _run(["systemctl", "disable", "ssh.service", "ssh.socket"], sudo=True)
+            # Mask both so they can't socket-activate back to life later —
             # matches the default appliance state from the harden hook.
             r = _run(["systemctl", "mask", "ssh.service", "ssh.socket"], sudo=True)
             if r.returncode == 0:
@@ -772,9 +773,24 @@ def action_toggle_ssh() -> None:
     else:
         if confirm("Enable SSH?"):
             # Harden hook masks ssh.service + ssh.socket at build time;
-            # enable --now on a masked unit fails. Unmask first.
+            # enable --now on a masked unit fails silently. Unmask both.
             _run(["systemctl", "unmask", "ssh.service", "ssh.socket"], sudo=True)
-            r = _run(["systemctl", "enable", "--now", "ssh.service"], sudo=True)
+
+            # The live ISO was built with SSH masked, so openssh-server's
+            # postinst never generated host keys. sshd will fail to start
+            # with "Host fingerprint: unavailable" unless we create them.
+            # ssh-keygen -A generates all four key types (rsa/ecdsa/ed25519
+            # and the legacy dsa if enabled) and is a no-op when they
+            # already exist — safe to always run.
+            _run(["ssh-keygen", "-A"], sudo=True)
+
+            # On noble, `ssh.service` is not socket-activated by default
+            # but ssh.socket also exists. Enable + start both so the
+            # listener comes up regardless of which unit owns port 22.
+            _run(["systemctl", "enable", "ssh.socket"], sudo=True)
+            _run(["systemctl", "enable", "ssh.service"], sudo=True)
+            _run(["systemctl", "start", "ssh.socket"], sudo=True)
+            r = _run(["systemctl", "start", "ssh.service"], sudo=True)
             if r.returncode == 0:
                 print(f"  {GREEN}SSH enabled.{RESET}")
                 fp = get_ssh_fingerprints()
