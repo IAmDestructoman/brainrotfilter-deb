@@ -1,3 +1,44 @@
+brainrotfilter (1.1.0-1) unstable; urgency=medium
+
+  * APPLIANCE RELEASE — preparing for physical transparent-bridge deployment.
+  * ICAP body-inspection service (brainrotfilter-icap.service) — reads
+    YouTube /youtubei/v1/(player|next) POST bodies to extract videoId
+    even when watch URLs are cached. Log-only by default.
+  * Supervisor watchdog (brainrotfilter-watchdog.service) — per-service
+    health + auto-restart with per-hour rate limit, plus /status admin page.
+  * Pre-emptive CDN deny with per-client/per-video tracking, 40s TTL,
+    auto-release on navigation to allowed content.
+  * Squid configuration parity with field-validated live config: ICAP
+    directives, host_verify_strict off, shim ACL whitelist, rewriter
+    concurrency=1, extended playback-URL regex.
+  * Transparent-bridge wizard (configure_bridge): 2-NIC → br0 netplan,
+    br_netfilter sysctls, no NAT MASQUERADE. Interface picker with MAC
+    / link state / speed.
+  * BTRFS + snapper integration: factory snapshot taken post-wizard
+    on BTRFS root, rollback via TUI or /api/system/rollback.
+  * Config backup & restore: /backup admin page, export DB + env +
+    keyword JSONs + Squid fragments as a gzipped tar, import with
+    version compatibility check + .bak safety copies + service restart.
+  * Console TUI on tty1 (pfSense-style): system status, interface
+    re-assignment, management IP, factory reset, service restart,
+    update, SSH toggle (disabled by default), shell, reboot/shutdown.
+  * Persistent CA certificate admin page at /ca-cert with per-OS
+    install instructions (Windows, macOS, iOS, Android, Chromebook,
+    Linux).
+  * Packaging: ships squid_cdn_block_helper.sh, icap + watchdog +
+    console systemd units, all new Python modules. Depends now
+    include iptables-persistent, bridge-utils, ebtables. Recommends
+    btrfs-progs, snapper, dialog, python3-httpx.
+  * Postinst creates /var/lib/brainrotfilter writable for watchdog,
+    enables icap + watchdog services, disables SSH by default.
+  * Custom Ubuntu ISO build pipeline (iso/) — live-build config for
+    a stripped hardened appliance image with BrainrotFilter preinstalled.
+  * DEPLOYMENT.md — full physical deployment guide: hardware (NIC
+    recommendations, mini-PC suggestions), topology diagram, CA
+    distribution, hardening manifest, TUI reference, troubleshooting.
+
+ -- IAmDestructoman <121320244+IAmDestructoman@users.noreply.github.com>  Fri, 17 Apr 2026 02:00:00 +0000
+
 brainrotfilter (1.0.2-1) unstable; urgency=medium
 
   * Block enforcement: per-client CDN deny holds while a blocked video's
