@@ -1,0 +1,7 @@
+// Live-build injects a local apt repo at file:/root/packages/ containing
+// our .deb. We build with --apt-secure false on the live-build side, but
+// the chroot's apt still refuses unsigned repos by default. Allow them —
+// only the local build-time repo is unsigned; Ubuntu mirrors stay signed.
+APT::Get::AllowUnauthenticated "true";
+Acquire::AllowInsecureRepositories "true";
+Acquire::AllowDowngradeToInsecureRepositories "true";

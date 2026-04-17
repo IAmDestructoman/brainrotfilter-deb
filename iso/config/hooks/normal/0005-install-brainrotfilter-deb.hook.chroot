@@ -1,0 +1,28 @@
+#!/bin/bash
+# Install the BrainrotFilter .deb staged at /opt/brainrot-install/.
+# Runs inside the chroot before the strip/harden/branding hooks so that
+# those can assume brainrotfilter is present (e.g. systemctl enable).
+# We deliberately avoid live-build's packages.chroot/ path because it
+# spins up a signed local apt repo that needs host-side gpg key generation,
+# which breaks in detached/non-tty build environments.
+set -e
+
+echo "[brainrot-iso] Installing BrainrotFilter .deb..."
+
+DEB_DIR=/opt/brainrot-install
+DEB=$(ls -1 "$DEB_DIR"/brainrotfilter_*.deb 2>/dev/null | head -1)
+
+if [ -z "$DEB" ]; then
+    echo "ERROR: no brainrotfilter_*.deb found in $DEB_DIR" >&2
+    exit 1
+fi
+
+# Install; resolve missing deps with apt-get -f install.
+dpkg -i "$DEB" 2>&1 || true
+apt-get update 2>&1 || true
+DEBIAN_FRONTEND=noninteractive apt-get install -fy 2>&1
+
+# Clean up staging
+rm -rf "$DEB_DIR"
+
+echo "[brainrot-iso] BrainrotFilter .deb installed."

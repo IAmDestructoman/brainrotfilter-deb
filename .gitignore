@@ -46,3 +46,8 @@ debian/*.debhelper.log
 
 # Claude Code memory (local only)
 .claude/
+
+# ISO build artifacts
+iso/work/
+iso/packages/*.deb
+iso/*.iso

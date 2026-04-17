@@ -1,0 +1,5 @@
+// Large packages occasionally hit HTTP 429 rate-limits from upstream
+// mirrors during heavy parallel fetches. Retry a few times before giving up.
+Acquire::Retries "5";
+Acquire::http::Timeout "60";
+Acquire::https::Timeout "60";
