@@ -1,9 +1,15 @@
 #!/bin/bash
-# Heartbeat: writes one status line every 5 min until the ISO build finishes.
+# Heartbeat: writes one status line every 60 s until the ISO build finishes.
 # Used by the autonomous ISO build flow; NOT shipped in the .deb.
-LOG=/home/ytfilter/brainrot-iso/build-full.log
-ISO_DIR=/home/ytfilter/brainrot-iso
-PW=password
+#
+# Override via env:
+#   BRAINROT_BUILD_DIR=/path/to/build/dir   (default: $HOME/brainrot-iso)
+#   BRAINROT_SUDO_PW=password               (only needed if sudo requires it)
+: "${BRAINROT_BUILD_DIR:=$HOME/brainrot-iso}"
+: "${BRAINROT_SUDO_PW:=password}"
+LOG="$BRAINROT_BUILD_DIR/build-full.log"
+ISO_DIR="$BRAINROT_BUILD_DIR"
+PW="$BRAINROT_SUDO_PW"
 
 read_log() { echo "$PW" | sudo -S tail -200 "$LOG" 2>/dev/null; }
 full_tail() { echo "$PW" | sudo -S tail -30 "$LOG" 2>/dev/null; }

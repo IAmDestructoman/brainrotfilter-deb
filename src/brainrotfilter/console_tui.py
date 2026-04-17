@@ -167,7 +167,10 @@ def _state_color(state: str) -> str:
 
 
 def clear_screen() -> None:
-    os.system("clear")
+    # ANSI clear + cursor-home: works on every terminal the TUI will run on
+    # (Linux tty1, SSH xterm) and doesn't shell out.
+    sys.stdout.write("\033[2J\033[H")
+    sys.stdout.flush()
 
 
 def pause() -> None:
