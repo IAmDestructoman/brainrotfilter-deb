@@ -80,11 +80,26 @@ case "$1" in
         # Add brainrotfilter to the proxy group so it can read Squid files
         usermod -aG proxy brainrotfilter 2>/dev/null || true
 
+        # Writable state dir for watchdog / snapshots / backups
+        install -d -m 755 /var/lib/brainrotfilter
+        chown brainrotfilter:brainrotfilter /var/lib/brainrotfilter || true
+
+        # Squid helper needs to read /etc/brainrotfilter
+        chmod 755 /etc/brainrotfilter || true
+
         # Enable and start the service
         systemctl daemon-reload
         systemctl enable brainrotfilter-squid-apply.service || true
         systemctl enable brainrotfilter.service || true
+        systemctl enable brainrotfilter-icap.service || true
+        systemctl enable brainrotfilter-watchdog.service || true
+        systemctl enable brainrotfilter-console.service || true
         systemctl start brainrotfilter.service || true
+        systemctl start brainrotfilter-icap.service || true
+        systemctl start brainrotfilter-watchdog.service || true
+
+        # SSH disabled by default on appliance — TUI option toggles it
+        systemctl disable ssh.service 2>/dev/null || true
 
         echo ""
         echo "======================================"
