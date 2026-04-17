@@ -399,7 +399,7 @@ def _tui_create_bridge(nics: List[Dict[str, str]]) -> None:
     # NIC that might be plugged in later won't get pulled in by accident.
     netdev = (
         "[NetDev]\nName=br0\nKind=bridge\n\n"
-        "[Bridge]\nSTP=no\nForwardDelay=0\n"
+        "[Bridge]\nSTP=no\nForwardDelaySec=0\n"
     )
     match_names = " ".join(members)
     members_net = (

@@ -27,29 +27,11 @@
 
 <form id="settings-form" onsubmit="e => e.preventDefault()">
 
-  <!-- ── YouTube API ────────────────────────────────────────── -->
-  <div class="settings-section">
-    <div class="settings-section-header">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><polygon points="10,8 16,12 10,16"/></svg>
-      YouTube API
-    </div>
-    <div class="settings-section-body">
-      <div class="form-group" style="grid-column:1/-1">
-        <label class="form-label" for="youtube_api_key">API Key</label>
-        <div class="flex flex-gap" style="gap:8px">
-          <input type="text" id="youtube_api_key" name="youtube_api_key" class="form-input" placeholder="AIza…" autocomplete="off" aria-label="YouTube API key">
-          <button type="button" class="btn btn-secondary" onclick="toggleApiKeyVisibility()" title="Toggle visibility">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-          </button>
-          <button type="button" class="btn btn-secondary" onclick="testApiKey()" id="btn-test-api">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>
-            Test Connection
-          </button>
-        </div>
-        <div id="api-test-result" style="font-size:0.82rem;margin-top:6px"></div>
-      </div>
-    </div>
-  </div>
+  <!-- YouTube API key section removed in 1.1.0 — classification now
+       relies on on-box signals (keyword / OCR / audio / optional LLM)
+       and no longer queries the YouTube Data API. The hidden input is
+       kept so the settings JS payload keeps its shape; submit blank. -->
+  <input type="hidden" id="youtube_api_key" name="youtube_api_key" value="">
 
   <!-- ── Analysis Thresholds ───────────────────────────────── -->
   <div class="settings-section">
