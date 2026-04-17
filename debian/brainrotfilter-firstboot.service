@@ -1,0 +1,22 @@
+[Unit]
+Description=BrainrotFilter first-boot bridge setup
+Documentation=https://github.com/IAmDestructoman/brainrotfilter-deb
+# Must run before network comes up so netplan's generated configs
+# reflect the bridge we create here, not a per-NIC DHCP config.
+DefaultDependencies=no
+After=systemd-udevd.service local-fs.target
+Before=network-pre.target systemd-networkd.service
+Wants=network-pre.target
+# No-op once the wizard has configured the permanent bridge.
+ConditionPathExists=!/etc/brainrotfilter/.wizard_complete
+ConditionPathExists=!/etc/brainrotfilter/.firstboot_bridge_done
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/brainrotfilter/scripts/firstboot_bridge.sh
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=network-pre.target

@@ -94,6 +94,7 @@ case "$1" in
         systemctl enable brainrotfilter-icap.service || true
         systemctl enable brainrotfilter-watchdog.service || true
         systemctl enable brainrotfilter-console.service || true
+        systemctl enable brainrotfilter-firstboot.service || true
         systemctl start brainrotfilter.service || true
         systemctl start brainrotfilter-icap.service || true
         systemctl start brainrotfilter-watchdog.service || true
