@@ -127,15 +127,60 @@ mount "$P_ESP" "$MNT/boot/efi"
 echo "Extracting root filesystem (this takes 2-5 minutes)..."
 unsquashfs -f -d "$MNT" "$SQUASHFS" >/dev/null 2>&1
 
-# -- Preserve live session state so wizard / bridge config sticks --
+# -- Preserve live session state so wizard / bridge / SSH / iptables
+#    / root password all carry over to the installed system.
 echo "Preserving live session state..."
+
+# Directories: rsync recursively.
 for src in /etc/brainrotfilter \
            /var/lib/brainrotfilter \
            /etc/systemd/network \
-           /etc/netplan; do
+           /etc/netplan \
+           /etc/sudoers.d \
+           /etc/iptables \
+           /etc/ssh/sshd_config.d; do
     if [ -d "$src" ] && [ -n "$(ls -A "$src" 2>/dev/null)" ]; then
         mkdir -p "$MNT$src"
         rsync -a "$src/" "$MNT$src/"
+    fi
+done
+
+# Individual files: account databases for the operator's root password
+# (set via TUI option 3 or 7) + anything else modified at runtime.
+for f in /etc/passwd /etc/shadow /etc/group /etc/gshadow /etc/subuid /etc/subgid; do
+    [ -f "$f" ] && cp -a "$f" "$MNT$f"
+done
+
+# Preserve "unit enable state" by mirroring selected target.wants
+# symlink directories. This carries over:
+#   - SSH enabled/unmasked state (sockets.target.wants/ssh.socket,
+#     multi-user.target.wants/ssh.service)
+#   - Mask state (symlinks in /etc/systemd/system/*.service -> /dev/null)
+for wants in /etc/systemd/system/multi-user.target.wants \
+             /etc/systemd/system/sockets.target.wants \
+             /etc/systemd/system/network-pre.target.wants \
+             /etc/systemd/system/default.target.wants; do
+    if [ -d "$wants" ]; then
+        mkdir -p "$MNT$wants"
+        rsync -a "$wants/" "$MNT$wants/"
+    fi
+done
+
+# Mask-symlinks (ssh.service -> /dev/null et al) live directly in
+# /etc/systemd/system/, not under a target.wants dir.
+for mask in /etc/systemd/system/*.service /etc/systemd/system/*.socket; do
+    [ -L "$mask" ] && cp -a "$mask" "$MNT$mask" 2>/dev/null || true
+done
+
+# Copy any non-mask unit overrides too (e.g. getty@tty1.service.d/
+# autologin.conf was written by the harden hook at build time and is
+# already in the squashfs, but operator customizations land here).
+for override_dir in /etc/systemd/system/*.service.d \
+                    /etc/systemd/system/*.socket.d; do
+    if [ -d "$override_dir" ]; then
+        rel="${override_dir#/}"
+        mkdir -p "$MNT/$rel"
+        cp -a "$override_dir/." "$MNT/$rel/" 2>/dev/null || true
     fi
 done
 
