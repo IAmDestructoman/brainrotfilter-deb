@@ -97,9 +97,10 @@ DEFAULTS: Dict[str, Any] = {
     "audio_chaos_weight": 0.35,
     "audio_nlp_weight": 0.25,
 
-    # YouTube API
-    "youtube_api_key": os.environ.get("YOUTUBE_API_KEY", ""),
-    "youtube_api_quota_per_day": 10000,
+    # YouTube API removed in 1.1.0 — classification runs on-box from
+    # keyword / OCR / audio / optional LLM signals and no longer queries
+    # the YouTube Data API. Leaving the empty key here would let old
+    # callers silently hit the API; nothing reads it now.
 
     # Service configuration
     "service_host": os.environ.get("SERVICE_HOST", "0.0.0.0"),
@@ -347,7 +348,10 @@ class Config:
 
     @property
     def youtube_api_key(self) -> str:
-        return self.get_str("youtube_api_key")
+        # Kept as a no-op getter so any lingering caller still compiles
+        # (returns empty). YouTube Data API integration was dropped in
+        # 1.1.0; see wizard removal + analyzer_service API route removal.
+        return ""
 
     @property
     def service_host(self) -> str:

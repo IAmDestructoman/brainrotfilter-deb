@@ -808,12 +808,20 @@ adaptation_access brainrot_yti deny all
                             "squid_cdn_block_helper.sh", "state_killer.sh"]:
             src = pkg_scripts / script_name
             dst = SCRIPTS_DIR / script_name
-            if src.exists():
-                shutil.copy2(str(src), str(dst))
+            if not src.exists():
+                logger.warning("Helper script not found: %s", src)
+                continue
+            # When the .deb ships into SCRIPTS_DIR directly (the common
+            # case on the appliance), src == dst and shutil.copy2 raises
+            # SameFileError. The script is already in place — just make
+            # sure it's executable and record it.
+            try:
+                if os.path.abspath(str(src)) != os.path.abspath(str(dst)):
+                    shutil.copy2(str(src), str(dst))
                 os.chmod(str(dst), 0o755)
                 installed.append(script_name)
-            else:
-                logger.warning("Helper script not found: %s", src)
+            except Exception as exc:
+                logger.warning("Could not install helper %s: %s", script_name, exc)
 
         # Detect the gateway IP dynamically (same socket trick as configure_squid)
         import socket as _socket
@@ -883,8 +891,13 @@ adaptation_access brainrot_yti deny all
     # -- Service Management ------------------------------------------------
 
     def restart_squid(self) -> Dict[str, Any]:
-        """Restart the Squid service."""
-        r = self._run(["systemctl", "restart", "squid"], timeout=30)
+        """Restart the Squid service.
+
+        First-boot restarts can take a while because Squid regenerates
+        the SSL bump certificate DB. 120s is a safe ceiling; normal
+        steady-state restarts finish in under 5s.
+        """
+        r = self._run(["systemctl", "restart", "squid"], timeout=120)
         return {
             "success": r.returncode == 0,
             "error": r.stderr if r.returncode != 0 else None,

@@ -335,6 +335,13 @@ input[type="range"]::-webkit-slider-thumb {
 .progress-step.running { background: rgba(0,180,216,0.08); }
 .progress-step.done { background: rgba(34,197,94,0.06); }
 .progress-step.error { background: rgba(239,68,68,0.08); }
+.progress-step.warning { background: rgba(234,179,8,0.08); }
+
+.progress-step-label {
+  display: block;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 
 .progress-step-icon {
   width: 24px;
@@ -779,9 +786,7 @@ input[type="range"]::-webkit-slider-thumb {
         Squid proxy, SSL interception, and iptables rules. Click
         <strong>Next</strong> to begin.
       </p>
-      <!-- Hidden input preserved so downstream JS that reads apiKey still
-           functions; it simply submits as empty. -->
-      <input type="hidden" id="apiKey" value="">
+      <!-- YouTube API key input removed in 1.1.0 (no longer used). -->
     </div>
 
     <!-- ================================================================ -->
@@ -1297,7 +1302,7 @@ input[type="range"]::-webkit-slider-thumb {
   var currentStep = 1;
   var keywords = [];
   var systemState = null;
-  var apiKeyVerified = false;
+  // apiKeyVerified removed in 1.1.0 — no API key step.
   var networkMode = 'bridge';  // 'bridge' | 'single'
   var lastInterfaceData = [];
   var lastBridgeInfo = {exists: false, members: []};
@@ -1474,40 +1479,7 @@ input[type="range"]::-webkit-slider-thumb {
     if (step === 6) buildSuccessLinks();
   }
 
-  // -- API Key test --
-
-  window.testApiKey = function() {
-    var key = document.getElementById('apiKey').value.trim();
-    if (!key) {
-      showResult('apiKeyResult', 'Please enter an API key first.', 'error');
-      return;
-    }
-    var btn = document.getElementById('btnTestKey');
-    btn.disabled = true;
-    btn.textContent = 'Testing...';
-    fetch('/api/wizard/test-key', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({api_key: key}),
-    })
-    .then(function(resp) { return resp.json(); })
-    .then(function(data) {
-      if (data.valid) {
-        showResult('apiKeyResult', data.message + (data.quota_info ? ' (' + data.quota_info + ')' : ''), 'success');
-        apiKeyVerified = true;
-      } else {
-        showResult('apiKeyResult', data.message, 'error');
-        apiKeyVerified = false;
-      }
-    })
-    .catch(function(e) {
-      showResult('apiKeyResult', 'Connection error: ' + e.message, 'error');
-    })
-    .finally(function() {
-      btn.disabled = false;
-      btn.textContent = 'Test';
-    });
-  };
+  // API-key test removed in 1.1.0 along with the YouTube Data API dep.
 
   // -- Network interfaces --
 
@@ -1867,7 +1839,7 @@ input[type="range"]::-webkit-slider-thumb {
       div.className = 'progress-step';
       div.id = 'pstep_' + steps[s].id;
       div.innerHTML = '<div class="progress-step-icon"><span style="color:var(--text-muted)">\u2022</span></div>' +
-        '<div style="flex:1"><span>' + steps[s].label + '</span>' +
+        '<div style="flex:1;min-width:0"><span class="progress-step-label">' + steps[s].label + '</span>' +
         '<details class="step-details" id="pdetails_' + steps[s].id + '">' +
         '<summary>\u25B6 details</summary>' +
         '<pre class="step-log" id="plog_' + steps[s].id + '"></pre>' +
@@ -1879,7 +1851,7 @@ input[type="range"]::-webkit-slider-thumb {
       ? 'br0'
       : document.getElementById('networkInterface').value;
     var payload = {
-      api_key: document.getElementById('apiKey').value.trim(),
+      // api_key removed in 1.1.0 (no YouTube Data API dependency)
       network_interface: selectedIface,
       thresholds: {
         keyword_weight: parseInt(document.getElementById('kwWeight').value) / 100,
@@ -1968,7 +1940,11 @@ input[type="range"]::-webkit-slider-thumb {
     else if (evt.status === 'error') icon = '<span style="color:var(--error)">\u2717</span>';
     else if (evt.status === 'warning') icon = '<span style="color:var(--warning)">\u26A0</span>';
     stepEl.querySelector('.progress-step-icon').innerHTML = icon;
-    var label = stepEl.querySelector('span');
+    // Previously used querySelector('span') which returned the icon's
+    // <span> (first in document order), so the message text ended up
+    // inside the icon column and the original label never updated —
+    // visible as overlapping text in the VM screenshots.
+    var label = stepEl.querySelector('.progress-step-label');
     if (label) label.textContent = evt.message;
 
     var logEl = document.getElementById('plog_' + evt.step);

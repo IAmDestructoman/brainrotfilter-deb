@@ -297,38 +297,9 @@ const DEFAULTS = {
 
 };
 
-/* ── Toggle API key visibility ───────────────────────────────── */
-function toggleApiKeyVisibility() {
-  const el = document.getElementById('youtube_api_key');
-  if (el.type === 'password') {
-    el.type = 'text';
-  } else {
-    el.type = 'password';
-  }
-}
-
-/* ── Test API key ────────────────────────────────────────────── */
-async function testApiKey() {
-  const btn = document.getElementById('btn-test-api');
-  const result = document.getElementById('api-test-result');
-  const key = document.getElementById('youtube_api_key').value.trim();
-
-  if (!key) { result.innerHTML = '<span style="color:var(--warning)">⚠ Please enter an API key first</span>'; return; }
-
-  btn.disabled = true;
-  btn.innerHTML = '<div class="spinner" style="width:14px;height:14px;border-width:2px"></div> Testing…';
-  result.innerHTML = '';
-
-  try {
-    const res = await BF.postJSON('/api/settings/test-youtube-api', { api_key: key });
-    result.innerHTML = `<span style="color:var(--success)">✓ Connection successful — quota: ${res.quota_used || 'unknown'}</span>`;
-  } catch (e) {
-    result.innerHTML = `<span style="color:var(--danger)">✕ Test failed: ${BF.escapeHtml(e.message)}</span>`;
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg> Test Connection`;
-  }
-}
+/* YouTube API key visibility / test removed in 1.1.0 — classification
+   is now fully on-box (keyword / OCR / audio / optional LLM) and no
+   longer calls the YouTube Data API. */
 
 /* ── Tier range preview ──────────────────────────────────────── */
 function updateTierPreview() {

@@ -45,7 +45,7 @@ ProtectHome=true
 # Wizard writes bridge / interception config into netplan, systemd-networkd,
 # sysctl, modules-load, and squid's drop-in dir. ProtectSystem=strict would
 # otherwise make /etc read-only and configure_bridge() fails with EROFS.
-ReadWritePaths=/var/lib/brainrotfilter /var/log/brainrotfilter /etc/brainrotfilter /tmp /etc/netplan /etc/systemd/network /etc/sysctl.d /etc/modules-load.d /etc/squid /etc/iptables
+ReadWritePaths=/var/lib/brainrotfilter /var/log/brainrotfilter /etc/brainrotfilter /tmp /etc/netplan /etc/systemd/network /etc/sysctl.d /etc/modules-load.d /etc/squid /etc/iptables /etc/hosts
 PrivateTmp=false
 
 # Capabilities — needed for conntrack state killing (net connection tracking)

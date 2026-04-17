@@ -1205,33 +1205,10 @@ async def api_update_settings(new_settings: Dict[str, Any]) -> Dict[str, Any]:
     return {"status": "updated", "updated_keys": list(new_settings.keys())}
 
 
-@app.post("/api/settings/test-youtube-api")
-async def settings_test_youtube_api(body: dict) -> dict:
-    """Test a YouTube API key — called from the settings page."""
-    api_key = body.get("api_key", "")
-    if not api_key:
-        return {"valid": False, "message": "No API key provided"}
-    import httpx
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(
-                "https://www.googleapis.com/youtube/v3/videos",
-                params={"id": "dQw4w9WgXcQ", "part": "snippet", "key": api_key},
-            )
-        if resp.status_code == 200 and resp.json().get("items"):
-            return {"valid": True, "message": "API key is valid"}
-        elif resp.status_code == 403:
-            return {
-                "valid": False,
-                "message": "API key rejected (403) — check YouTube Data API v3 is enabled",
-            }
-        else:
-            return {
-                "valid": False,
-                "message": f"Unexpected response: HTTP {resp.status_code}",
-            }
-    except Exception as exc:
-        return {"valid": False, "message": f"Connection error: {exc}"}
+# /api/settings/test-youtube-api removed in 1.1.0 — classification no
+# longer queries the YouTube Data API. The settings.html form still
+# submits a blank youtube_api_key field for payload-shape compat but
+# nothing consumes it on the backend.
 
 
 # ---------------------------------------------------------------------------

@@ -9,7 +9,7 @@ Endpoints
 ---------
 GET  /wizard                       Redirect to /setup-wizard (compat)
 GET  /api/wizard/status            Has the wizard been completed?
-POST /api/wizard/test-key          Validate a YouTube Data API v3 key
+#   (POST /api/wizard/test-key was removed in 1.1.0 along with YouTube API)
 GET  /api/wizard/detect            Detect local system state
 POST /api/wizard/apply             Apply all settings (streaming SSE)
 GET  /api/wizard/keywords          Return current keywords
@@ -56,14 +56,6 @@ router = APIRouter(prefix="/api/wizard", tags=["wizard"])
 
 # -- Pydantic Models ----------------------------------------------------------
 
-class ApiKeyTestRequest(BaseModel):
-    api_key: str = Field(..., min_length=1)
-
-class ApiKeyTestResponse(BaseModel):
-    valid: bool
-    message: str
-    quota_info: Optional[str] = None
-
 class Keyword(BaseModel):
     keyword: str
     weight: int = Field(default=5, ge=1, le=10)
@@ -90,7 +82,10 @@ class Thresholds(BaseModel):
         return round(max(0.0, min(1.0, v)), 4)
 
 class WizardApplyRequest(BaseModel):
-    api_key: str
+    # Accept `api_key` as an optional legacy field so older frontends that
+    # still submit it don't 422. Value is ignored — classification no
+    # longer uses the YouTube Data API.
+    api_key: Optional[str] = None
     # Network settings
     network_interface: str = "eth0"
     # Detection settings
@@ -177,7 +172,6 @@ async def _stream_apply_progress(
         yield sse("save_config", "running", "Saving configuration...")
         try:
             settings_to_save = {
-                "youtube_api_key": payload.api_key,
                 "combined_threshold": str(payload.thresholds.combined),
                 "keyword_weight": str(payload.thresholds.keyword_weight),
                 "scene_weight": str(payload.thresholds.scene_weight),
@@ -423,36 +417,6 @@ async def wizard_status() -> WizardStatus:
         redirect="/setup-wizard" if not completed else None,
     )
 
-@router.post("/test-key", response_model=ApiKeyTestResponse)
-async def test_api_key(req: ApiKeyTestRequest) -> ApiKeyTestResponse:
-    test_video_id = "dQw4w9WgXcQ"
-    url = "https://www.googleapis.com/youtube/v3/videos"
-    params = {"id": test_video_id, "part": "snippet", "key": req.api_key}
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(url, params=params)
-        if resp.status_code == 200:
-            data = resp.json()
-            if data.get("items"):
-                return ApiKeyTestResponse(
-                    valid=True,
-                    message="API key is valid.",
-                    quota_info="1 unit used (daily limit: 10,000 units)",
-                )
-            return ApiKeyTestResponse(valid=True, message="API key accepted but returned no items.")
-        elif resp.status_code == 403:
-            error_info = resp.json().get("error", {})
-            reason = error_info.get("errors", [{}])[0].get("reason", "")
-            if reason == "quotaExceeded":
-                return ApiKeyTestResponse(valid=True, message="Key valid but quota exhausted.")
-            return ApiKeyTestResponse(valid=False, message="API key rejected (403). Enable YouTube Data API v3.")
-        else:
-            return ApiKeyTestResponse(valid=False, message=f"HTTP {resp.status_code}")
-    except httpx.TimeoutException:
-        return ApiKeyTestResponse(valid=False, message="Request timed out.")
-    except Exception as exc:
-        return ApiKeyTestResponse(valid=False, message=f"Error: {exc}")
-
 @router.get("/detect")
 async def detect_system_state() -> Dict[str, Any]:
     """Detect current Linux system configuration state."""
@@ -616,13 +580,6 @@ async def container_health():
             yield sse("db_check", "done", "Database OK")
         except Exception as e:
             yield sse("db_check", "error", str(e))
-
-        # API key
-        api_key = os.environ.get("YOUTUBE_API_KEY", "")
-        if api_key and api_key != "your_youtube_api_key_here":
-            yield sse("api_key_check", "done", "YouTube API key configured")
-        else:
-            yield sse("api_key_check", "warning", "YouTube API key not set")
 
         yield sse("service_ready", "done", "System ready")
         yield "data: [DONE]\n\n"
