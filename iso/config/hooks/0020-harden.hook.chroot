@@ -97,12 +97,26 @@ fi
 # already reboot the box and factory-reset via snapper, so unrestricted
 # NOPASSWD here is the correct threat model (matches pfSense / OPNsense /
 # Untangle appliances).
-# First-boot default: the brainrotfilter-firstboot.service (oneshot)
-# enumerates physical NICs at boot and writes a proper bridge netplan
-# config — we can't ship a static one because NIC names vary per box
-# (enp2s0 vs eno1 vs eth0). Ensure /etc/netplan exists with no stray
-# defaults that would race.
+# First-boot default netplan: DHCP every physical ethernet. The wizard
+# replaces this with a bridge config on successful setup. For the first
+# connection the operator needs to plug their workstation into the same
+# subnet the appliance's DHCP source is on (typically the router LAN).
 install -d -m 755 /etc/netplan
+cat > /etc/netplan/00-brainrot-firstboot.yaml <<'EOF'
+# BrainrotFilter first-boot default — DHCP on all physical ethernets.
+# Replaced by the wizard's bridge config on successful setup.
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    zz-firstboot:
+      match:
+        name: "en*"
+      dhcp4: true
+      dhcp6: false
+      optional: true
+EOF
+chmod 600 /etc/netplan/00-brainrot-firstboot.yaml
 
 install -d -m 755 /etc/sudoers.d
 cat > /etc/sudoers.d/50-brainrotfilter-appliance <<'EOF'

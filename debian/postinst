@@ -98,7 +98,6 @@ case "$1" in
         systemctl enable brainrotfilter-icap.service || true
         systemctl enable brainrotfilter-watchdog.service || true
         systemctl enable brainrotfilter-console.service || true
-        systemctl enable brainrotfilter-firstboot.service || true
         systemctl start brainrotfilter.service || true
         # icap/watchdog intentionally not started here — their unit-level
         # ConditionPathExists would skip the start anyway; the wizard's
