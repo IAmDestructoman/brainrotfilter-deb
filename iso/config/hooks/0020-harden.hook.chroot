@@ -84,6 +84,67 @@ ExecStart=
 ExecStart=-/sbin/agetty -o '-p -- appliance' --noclear --autologin appliance %I $TERM
 EOF
 
+# On the appliance ISO the TUI runs as the appliance user's shell via
+# getty@tty1 autologin above. brainrotfilter-console.service would ALSO
+# try to bind /dev/tty1 and respawns every RestartSec — visible as the
+# TUI flashing. Mask it out here (the .deb still ships the unit for
+# non-appliance installs that don't have the getty hook).
+systemctl mask brainrotfilter-console.service 2>/dev/null || true
+
+# tty2 (Alt+F2): live journal follow for the brainrot services + kernel.
+# Runs as root with auto-login so operators can flip to it without any
+# credentials for troubleshooting. Enable with: systemctl enable getty@tty2
+mkdir -p /etc/systemd/system/getty@tty2.service.d
+cat > /etc/systemd/system/getty@tty2.service.d/autologin.conf <<'EOF'
+[Unit]
+Description=BrainrotFilter debug log console on tty2
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty -o '-p -- brainrot-log' --noclear --autologin brainrot-log %I $TERM
+EOF
+
+# Ship the debug shell wrapper (the .deb doesn't own this file — it's
+# appliance-only). Create it BEFORE useradd so the user's shell exists
+# when useradd validates it.
+mkdir -p /usr/lib/brainrotfilter/tui
+cat > /usr/lib/brainrotfilter/tui/debug_console.sh <<'EOF'
+#!/bin/bash
+# Interactive log tail shown on tty2 (Alt+F2).
+clear
+cat <<BANNER
+
+  BrainrotFilter — Debug Log Console  (Alt+F1 → main TUI)
+  =========================================================
+
+  Showing live journal for:
+    brainrotfilter, brainrotfilter-icap, brainrotfilter-watchdog,
+    brainrotfilter-squid-apply, squid, systemd-networkd
+
+  Ctrl-C to stop, then this console re-auto-logins and resumes.
+
+BANNER
+
+exec journalctl -f \
+    -u brainrotfilter.service \
+    -u brainrotfilter-icap.service \
+    -u brainrotfilter-watchdog.service \
+    -u brainrotfilter-squid-apply.service \
+    -u squid.service \
+    -u systemd-networkd.service \
+    --since=-5min
+EOF
+chmod 755 /usr/lib/brainrotfilter/tui/debug_console.sh
+
+# Dedicated read-only user whose shell tails the appliance journals.
+if ! getent passwd brainrot-log >/dev/null; then
+    useradd -m -s /usr/lib/brainrotfilter/tui/debug_console.sh -G systemd-journal brainrot-log
+    passwd -d brainrot-log
+fi
+
+# Force getty@tty2 to actually spawn (by default agetty only runs on
+# tty1..tty6 as configured by logind; ensure tty2 is on).
+systemctl enable getty@tty2.service 2>/dev/null || true
+
 # Create the appliance user (no password, no shell — goes straight to TUI)
 if ! getent passwd appliance >/dev/null; then
     useradd -m -s /usr/lib/brainrotfilter/tui/console_tui.py -G sudo appliance
@@ -97,26 +158,56 @@ fi
 # already reboot the box and factory-reset via snapper, so unrestricted
 # NOPASSWD here is the correct threat model (matches pfSense / OPNsense /
 # Untangle appliances).
-# First-boot default netplan: DHCP every physical ethernet. The wizard
-# replaces this with a bridge config on successful setup. For the first
-# connection the operator needs to plug their workstation into the same
-# subnet the appliance's DHCP source is on (typically the router LAN).
-install -d -m 755 /etc/netplan
-cat > /etc/netplan/00-brainrot-firstboot.yaml <<'EOF'
-# BrainrotFilter first-boot default — DHCP on all physical ethernets.
-# Replaced by the wizard's bridge config on successful setup.
-network:
-  version: 2
-  renderer: networkd
-  ethernets:
-    zz-firstboot:
-      match:
-        name: "en*"
-      dhcp4: true
-      dhcp6: false
-      optional: true
+# First-boot default: an unfiltered L2 bridge (br0) of every physical
+# ethernet, DHCP on br0. Lets the operator reach the admin panel from
+# either side of the appliance before the wizard configures per-side
+# interception.
+#
+# Done as pure systemd-networkd static config — a one-shot service that
+# writes netplan then runs `netplan apply` Before= network-pre.target
+# deadlocks against networkd's own start. systemd-networkd reads these
+# files at startup; when the wizard runs it writes its own netplan
+# config AND deletes these three files (configure_bridge() in
+# linux_configurator.py), so there's no conflict on the permanent bridge.
+install -d -m 755 /etc/systemd/network
+
+cat > /etc/systemd/network/10-brainrot-br0.netdev <<'EOF'
+# BrainrotFilter first-boot bridge.
+[NetDev]
+Name=br0
+Kind=bridge
+
+[Bridge]
+STP=no
+ForwardDelay=0
 EOF
-chmod 600 /etc/netplan/00-brainrot-firstboot.yaml
+
+cat > /etc/systemd/network/20-brainrot-bridge-members.network <<'EOF'
+# Enslave every physical ethernet to br0.
+[Match]
+Name=en* eth*
+Type=ether
+
+[Network]
+Bridge=br0
+EOF
+
+cat > /etc/systemd/network/30-brainrot-br0.network <<'EOF'
+# DHCP on the bridge itself.
+[Match]
+Name=br0
+
+[Network]
+DHCP=ipv4
+LinkLocalAddressing=ipv6
+EOF
+
+chmod 644 /etc/systemd/network/10-brainrot-br0.netdev \
+          /etc/systemd/network/20-brainrot-bridge-members.network \
+          /etc/systemd/network/30-brainrot-br0.network
+
+# Make sure systemd-networkd is enabled; the bridge won't come up without it.
+systemctl enable systemd-networkd.service 2>/dev/null || true
 
 install -d -m 755 /etc/sudoers.d
 cat > /etc/sudoers.d/50-brainrotfilter-appliance <<'EOF'

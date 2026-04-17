@@ -97,6 +97,11 @@ case "$1" in
         systemctl enable brainrotfilter.service || true
         systemctl enable brainrotfilter-icap.service || true
         systemctl enable brainrotfilter-watchdog.service || true
+        # brainrotfilter-console.service is kept in the package for
+        # non-appliance installs (where there's no appliance user +
+        # getty autologin). On the appliance ISO, the harden hook
+        # masks it because getty@tty1 autologin runs the TUI itself —
+        # two things binding /dev/tty1 causes rapid service respawn.
         systemctl enable brainrotfilter-console.service || true
         systemctl start brainrotfilter.service || true
         # icap/watchdog intentionally not started here — their unit-level

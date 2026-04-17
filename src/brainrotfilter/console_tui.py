@@ -72,9 +72,15 @@ def _run(cmd: List[str], *, timeout: int = 15, capture: bool = True, sudo: bool 
 
 
 def _format_web_url(mgmt_ip: str) -> str:
-    """Format the Web UI URL; returns a placeholder when IP is unset."""
-    host = mgmt_ip.split("/")[0].strip() if mgmt_ip else ""
-    if not host or host == "N/A":
+    """Format the Web UI URL; returns a placeholder when IP is unset.
+
+    N.B. check the raw string before stripping the CIDR suffix — "N/A"
+    split on '/' would leave "N" and the placeholder check misfires.
+    """
+    if not mgmt_ip or mgmt_ip == "N/A":
+        return "(set Management IP first)"
+    host = mgmt_ip.split("/")[0].strip()
+    if not host:
         return "(set Management IP first)"
     return f"http://{host}:{WEB_PORT}"
 
