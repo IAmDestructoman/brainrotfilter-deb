@@ -544,6 +544,16 @@ adaptation_access brainrot_yti deny all
         except Exception as exc:
             return {"success": False, "error": f"Could not write {bridge_yaml}: {exc}"}
 
+        # Retire the first-boot DHCP-all default (shipped by the ISO
+        # hardening hook). Leaving it in place would race with br0 for the
+        # underlying NICs.
+        firstboot_yaml = netplan_dir / "00-brainrot-firstboot.yaml"
+        if firstboot_yaml.exists():
+            try:
+                firstboot_yaml.unlink()
+            except Exception as exc:
+                logger.warning("Could not remove %s: %s", firstboot_yaml, exc)
+
         # Comment out any `dhcp4: true` on the individual NICs in the
         # cloud-init netplan so we don't fight for the interfaces.
         cloud_init_patched = False

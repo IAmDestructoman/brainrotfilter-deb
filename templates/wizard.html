@@ -1558,15 +1558,35 @@ input[type="range"]::-webkit-slider-thumb {
       var lanSel = document.getElementById('lanNic');
       var singleSel = document.getElementById('networkInterface');
 
-      if (wanSel) _populateSelect(wanSel, ifaces, physical, ifaces[0] && ifaces[0].name);
-      if (lanSel) _populateSelect(lanSel, ifaces, physical, ifaces[1] && ifaces[1].name);
+      // Heuristic: the NIC facing the upstream router gets a DHCP lease
+      // on first boot (default netplan DHCPs every ethernet). The other
+      // physical NIC has carrier up but no IP. If exactly one of each,
+      // preselect WAN/LAN and tell the user so they can just hit Next.
+      var physicalIfaces = ifaces.filter(physical);
+      var hasRealAddr = function(i) {
+        return i.addr && !String(i.addr).startsWith('169.254') && String(i.addr) !== '0.0.0.0';
+      };
+      var withIp = physicalIfaces.filter(hasRealAddr);
+      var noIp = physicalIfaces.filter(function(i) { return !hasRealAddr(i); });
+      var detected = (physicalIfaces.length >= 2 && withIp.length === 1 && noIp.length >= 1)
+        ? {wan: withIp[0], lan: noIp[0]} : null;
+
+      var wanDefault = detected ? detected.wan.name : (ifaces[0] && ifaces[0].name);
+      var lanDefault = detected ? detected.lan.name : (ifaces[1] && ifaces[1].name);
+
+      if (wanSel) _populateSelect(wanSel, ifaces, physical, wanDefault);
+      if (lanSel) _populateSelect(lanSel, ifaces, physical, lanDefault);
       if (singleSel) _populateSelect(singleSel, ifaces, null, null);
       _renderNicInfo(ifaces);
 
       if (ifaces.length === 0) {
         showResult('ifaceResult', 'No interfaces detected', 'error');
+      } else if (detected) {
+        showResult('ifaceResult',
+          'Auto-detected: WAN=' + detected.wan.name + ' (lease ' + detected.wan.addr + '), LAN=' + detected.lan.name + ' (no IP). Click Next to use these.',
+          'success');
       } else {
-        showResult('ifaceResult', 'Found ' + ifaces.length + ' interface(s)', 'success');
+        showResult('ifaceResult', 'Found ' + ifaces.length + ' interface(s) — select WAN and LAN manually', 'success');
       }
     })
     .catch(function(e) {

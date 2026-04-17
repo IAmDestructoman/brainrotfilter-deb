@@ -222,6 +222,13 @@ def confirm(prompt: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def _wizard_complete() -> bool:
+    """True once the admin wizard has run. Matches brainrotfilter.wizard_integration
+    which writes /etc/brainrotfilter/.wizard_complete on success.
+    """
+    return os.path.exists("/etc/brainrotfilter/.wizard_complete")
+
+
 def print_header() -> None:
     br_state, br_members = get_bridge_info()
     mgmt_ip = get_management_ip()
@@ -236,6 +243,14 @@ def print_header() -> None:
     print(f"{BOLD}{CYAN}  BrainrotFilter Appliance Console{RESET}")
     print(f"{CYAN}{sep}{RESET}")
     print()
+
+    # Setup-pending banner. First-boot shows DHCP-assigned IP via the
+    # firstboot netplan; point the operator at the web wizard and
+    # highlight that bridge mode is not yet active.
+    if not _wizard_complete():
+        url = _format_web_url(mgmt_ip)
+        print(f"  {YELLOW}{BOLD}[ Setup not complete — open {url} to finish configuration ]{RESET}")
+        print()
 
     # Network
     if br_members:
