@@ -20,10 +20,16 @@ need_root() {
 }
 
 check_deps() {
-    for bin in lb xorriso wget gpg grub-mkrescue; do
+    for bin in lb xorriso wget gpg mkfs.vfat mcopy; do
         if ! command -v "$bin" >/dev/null 2>&1; then
             echo "Missing dependency: $bin" >&2
-            echo "Install with: sudo apt install live-build xorriso wget gnupg grub-pc-bin grub-efi-amd64-bin mtools" >&2
+            echo "Install with: sudo apt install live-build xorriso wget gnupg isolinux syslinux-common grub-efi-amd64-bin grub-efi-amd64-signed shim-signed mtools dosfstools" >&2
+            exit 1
+        fi
+    done
+    for f in /usr/lib/ISOLINUX/isolinux.bin /usr/lib/ISOLINUX/isohdpfx.bin; do
+        if [ ! -f "$f" ]; then
+            echo "Missing file: $f (install isolinux + syslinux-common)" >&2
             exit 1
         fi
     done
@@ -149,11 +155,10 @@ build_iso() {
 }
 
 remaster_iso() {
-    # live-build's final isohybrid step fails on noble (syslinux-utils not
-    # pulled in when we use grub-pc) and when it falls back the produced ISO
-    # has no El Torito boot record at all -> Rufus rejects as unbootable.
-    # Repack the ISO's contents with grub-mkrescue, which writes a proper
-    # hybrid ISO (BIOS via grub2-mbr + UEFI via El Torito EFI image).
+    # live-build's bootloader step on noble leaves the ISO with no usable
+    # El Torito record (syslinux can't pull gfxboot-theme-ubuntu, grub-pc
+    # path falls through to a missing isohybrid call). Repack with both
+    # BIOS (isolinux) and UEFI (shim+grub FAT image) boot records.
     local src
     for candidate in binary.hybrid.iso chroot/binary.hybrid.iso live-image-amd64.hybrid.iso; do
         if [ -f "$WORK_DIR/$candidate" ]; then
@@ -166,7 +171,7 @@ remaster_iso() {
         exit 1
     fi
 
-    echo "[build_iso] Remastering $src with grub-mkrescue for BIOS+UEFI hybrid boot..."
+    echo "[build_iso] Remastering $src with syslinux (BIOS) + shim/grub (UEFI)..."
     local stage=/tmp/brainrot-iso-stage
     local mnt=/tmp/brainrot-iso-mount
     rm -rf "$stage"
@@ -175,7 +180,6 @@ remaster_iso() {
     cp -a "$mnt/." "$stage/"
     umount "$mnt"
 
-    # Find kernel/initrd to write an appropriate grub.cfg
     local vmlinuz initrd
     vmlinuz=$(cd "$stage/casper" 2>/dev/null && ls vmlinuz-* 2>/dev/null | head -1)
     initrd=$(cd "$stage/casper" 2>/dev/null && ls initrd.img-* 2>/dev/null | head -1)
@@ -184,7 +188,36 @@ remaster_iso() {
         exit 1
     fi
 
-    mkdir -p "$stage/boot/grub"
+    # --- syslinux (BIOS)
+    mkdir -p "$stage/isolinux"
+    cp /usr/lib/ISOLINUX/isolinux.bin "$stage/isolinux/"
+    cp /usr/lib/syslinux/modules/bios/*.c32 "$stage/isolinux/" 2>/dev/null || true
+    cat > "$stage/isolinux/isolinux.cfg" <<EOF
+UI vesamenu.c32
+PROMPT 0
+TIMEOUT 50
+DEFAULT live
+
+MENU TITLE BrainrotFilter Appliance $VERSION
+
+LABEL live
+    MENU LABEL BrainrotFilter Appliance (Live)
+    MENU DEFAULT
+    KERNEL /casper/$vmlinuz
+    APPEND initrd=/casper/$initrd boot=casper quiet splash ---
+
+LABEL safe
+    MENU LABEL BrainrotFilter Appliance (Safe mode)
+    KERNEL /casper/$vmlinuz
+    APPEND initrd=/casper/$initrd boot=casper nomodeset ---
+
+LABEL mem
+    MENU LABEL Memory test
+    KERNEL /casper/memtest
+EOF
+
+    # --- grub config (used both by the EFI FAT image and as a fallback)
+    mkdir -p "$stage/boot/grub" "$stage/EFI/BOOT"
     cat > "$stage/boot/grub/grub.cfg" <<EOF
 set default=0
 set timeout=5
@@ -204,11 +237,57 @@ menuentry "Memory test" {
 }
 EOF
 
-    grub-mkrescue -o "$WORK_DIR/$ISO_NAME.remaster" "$stage" -- -volid BRAINROT_${VERSION} 2>&1 | tail -3
+    # --- UEFI FAT image (El Torito alt boot)
+    local shim_src=""
+    [ -f /usr/lib/shim/shimx64.efi.signed ] && shim_src=/usr/lib/shim/shimx64.efi.signed
+    local grub_src=""
+    for c in /usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed \
+             /usr/lib/grub/x86_64-efi/monolithic/grubx64.efi; do
+        [ -f "$c" ] && grub_src="$c" && break
+    done
+    [ -z "$grub_src" ] && { echo "ERROR: grubx64 not found" >&2; exit 1; }
+
+    if [ -n "$shim_src" ]; then
+        cp "$shim_src" "$stage/EFI/BOOT/BOOTX64.EFI"
+        cp "$grub_src" "$stage/EFI/BOOT/grubx64.efi"
+    else
+        cp "$grub_src" "$stage/EFI/BOOT/BOOTX64.EFI"
+    fi
+    cat > "$stage/EFI/BOOT/grub.cfg" <<'EOF'
+search --set=root --file /boot/grub/grub.cfg
+set prefix=($root)/boot/grub
+configfile /boot/grub/grub.cfg
+EOF
+
+    local efi_img="$stage/boot/grub/efi.img"
+    dd if=/dev/zero of="$efi_img" bs=1M count=10 status=none
+    mkfs.vfat -F 16 -n EFIBOOT "$efi_img" >/dev/null
+    mmd -i "$efi_img" ::/EFI ::/EFI/BOOT
+    mcopy -i "$efi_img" "$stage/EFI/BOOT/BOOTX64.EFI" ::/EFI/BOOT/BOOTX64.EFI
+    [ -f "$stage/EFI/BOOT/grubx64.efi" ] && \
+        mcopy -i "$efi_img" "$stage/EFI/BOOT/grubx64.efi" ::/EFI/BOOT/grubx64.efi
+    mcopy -i "$efi_img" "$stage/EFI/BOOT/grub.cfg" ::/EFI/BOOT/grub.cfg
+
+    # --- Pack
+    rm -f "$WORK_DIR/$ISO_NAME.remaster"
+    xorriso -as mkisofs \
+        -iso-level 3 \
+        -full-iso9660-filenames \
+        -volid "BRAINROT_${VERSION}" \
+        -eltorito-boot isolinux/isolinux.bin \
+        -eltorito-catalog isolinux/boot.cat \
+        -no-emul-boot -boot-load-size 4 -boot-info-table \
+        -eltorito-alt-boot \
+        -e boot/grub/efi.img \
+        -no-emul-boot \
+        -isohybrid-mbr /usr/lib/ISOLINUX/isohdpfx.bin \
+        -isohybrid-gpt-basdat \
+        -output "$WORK_DIR/$ISO_NAME.remaster" \
+        "$stage"
     rm -rf "$stage"
 
     if [ ! -s "$WORK_DIR/$ISO_NAME.remaster" ]; then
-        echo "ERROR: grub-mkrescue did not produce an ISO" >&2
+        echo "ERROR: xorriso did not produce an ISO" >&2
         exit 1
     fi
     mv "$WORK_DIR/$ISO_NAME.remaster" "$WORK_DIR/$ISO_NAME"
