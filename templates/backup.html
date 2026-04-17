@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}Backup &amp; Restore{% endblock %}
+{% block page_title %}Backup &amp; Restore{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Backup &amp; Restore</h1>
+    <div class="subtitle">Export the current configuration to a file, or restore from a previous backup</div>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:24px">
+  <div class="card-header">
+    <span class="card-title">Export Configuration</span>
+  </div>
+  <div style="padding:16px">
+    <p class="text-dim" style="margin-bottom:12px">
+      Download a single gzipped tarball containing the database, environment file,
+      keyword lists, and Squid fragments. Keep it somewhere safe &mdash; it contains
+      secrets (API keys, CA key paths) from <code>brainrotfilter.env</code>.
+    </p>
+    <a href="/api/system/config/export" class="btn btn-secondary" download>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+        <polyline points="7,10 12,15 17,10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      Download Backup (.tar.gz)
+    </a>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:24px">
+  <div class="card-header">
+    <span class="card-title">Bundle Contents</span>
+  </div>
+  <div style="padding:16px;font-size:0.9rem">
+    <ul style="margin:0;padding-left:20px;line-height:1.7">
+      <li><code>/var/lib/brainrotfilter/brainrotfilter.db</code> &mdash; SQLite database (videos, channels, whitelist, settings)</li>
+      <li><code>/etc/brainrotfilter/brainrotfilter.env</code> &mdash; environment / secrets</li>
+      <li><code>/etc/brainrotfilter/keywords.json</code> &mdash; local keyword rules</li>
+      <li><code>/etc/brainrotfilter/community-keywords.json</code> &mdash; synchronised community keywords</li>
+      <li><code>/etc/brainrotfilter/squid_brainrot.conf</code> &mdash; BrainrotFilter Squid snippet (if present)</li>
+      <li><code>/etc/squid/conf.d/brainrotfilter.conf</code> &mdash; Squid drop-in include (if present)</li>
+      <li><code>metadata.json</code> &mdash; version, timestamp, hostname</li>
+    </ul>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Restore Configuration</span>
+  </div>
+  <div style="padding:16px">
+    <div class="alert alert-warning"
+         style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.35);
+                color:#fca5a5;padding:10px 12px;border-radius:6px;margin-bottom:14px;font-size:0.85rem">
+      <strong>Warning:</strong> importing a bundle will overwrite the files listed above and
+      restart <code>brainrotfilter.service</code>. Any in-flight analyses will be lost.
+      A <code>.bak</code> copy of each replaced file is left next to it.
+    </div>
+
+    <form id="restore-form" style="display:flex;flex-direction:column;gap:12px;max-width:520px">
+      <input type="file"
+             id="backup-file"
+             name="file"
+             accept=".gz,.tgz,.tar.gz,application/gzip"
+             required
+             style="padding:8px;background:var(--bg-primary);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:0.85rem">
+      <div>
+        <button type="submit" id="restore-btn" class="btn btn-danger">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="1,4 1,10 7,10"/>
+            <path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
+          </svg>
+          Import &amp; Restart Service
+        </button>
+      </div>
+    </form>
+
+    <pre id="restore-result"
+         style="margin-top:14px;padding:10px;background:var(--bg-primary);border-radius:4px;
+                font-family:var(--font-mono);font-size:0.78rem;white-space:pre-wrap;
+                max-height:300px;overflow:auto;display:none"></pre>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  const form  = document.getElementById('restore-form');
+  const btn   = document.getElementById('restore-btn');
+  const file  = document.getElementById('backup-file');
+  const out   = document.getElementById('restore-result');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!file.files.length) return;
+    if (!confirm('This will overwrite the current configuration and restart the service. Continue?')) return;
+
+    const fd = new FormData();
+    fd.append('file', file.files[0]);
+
+    btn.disabled = true;
+    btn.textContent = 'Uploading…';
+    out.style.display = 'block';
+    out.textContent = 'Uploading and restoring…';
+
+    try {
+      const resp = await fetch('/api/system/config/import', {
+        method: 'POST',
+        body: fd,
+      });
+      const data = await resp.json().catch(() => ({}));
+      out.textContent = JSON.stringify(data, null, 2);
+      if (data && data.success) {
+        out.style.color = '#4ade80';
+      } else {
+        out.style.color = '#fca5a5';
+      }
+    } catch (err) {
+      out.style.color = '#fca5a5';
+      out.textContent = 'Upload failed: ' + (err && err.message ? err.message : err);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = 'Import &amp; Restart Service';
+    }
+  });
+})();
+</script>
+{% endblock %}

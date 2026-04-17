@@ -1,0 +1,48 @@
+#!/bin/bash
+# Install the BrainrotFilter .deb into the chroot.
+# The .deb was placed at config/packages.chroot/ by build.sh,
+# and live-build auto-installs anything in packages.chroot/ —
+# so nothing to do here except branding.
+
+set -e
+
+echo "[brainrot-iso] Finalizing BrainrotFilter appliance..."
+
+# Branding: MOTD + issue
+cat > /etc/motd <<'EOF'
+==========================================================
+  BrainrotFilter Appliance
+  ------------------------
+  Admin Panel: http://<your-ip>:8199
+  Console TUI: tty1 (Alt-F1)
+  SSH: disabled by default (enable via TUI option 7)
+==========================================================
+EOF
+
+cat > /etc/issue <<'EOF'
+BrainrotFilter Appliance
+Console menu on tty1. Admin panel at http://\4:8199
+
+EOF
+
+# Issue for remote (SSH banner)
+cat > /etc/issue.net <<'EOF'
+BrainrotFilter Appliance - authorized use only
+EOF
+
+# Prefer journald only — we purged rsyslog; make sure journald keeps logs
+mkdir -p /etc/systemd/journald.conf.d
+cat > /etc/systemd/journald.conf.d/brainrot.conf <<'EOF'
+[Journal]
+Storage=persistent
+SystemMaxUse=200M
+RuntimeMaxUse=50M
+EOF
+
+# Enable our services (postinst already did most of this, but belt-and-braces)
+systemctl enable brainrotfilter.service 2>/dev/null || true
+systemctl enable brainrotfilter-icap.service 2>/dev/null || true
+systemctl enable brainrotfilter-watchdog.service 2>/dev/null || true
+systemctl enable brainrotfilter-console.service 2>/dev/null || true
+
+echo "[brainrot-iso] Done."

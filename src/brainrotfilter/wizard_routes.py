@@ -15,7 +15,8 @@ POST /api/wizard/apply             Apply all settings (streaming SSE)
 GET  /api/wizard/keywords          Return current keywords
 PUT  /api/wizard/keywords          Replace keyword list
 GET  /api/wizard/ca-export         Download CA certificate
-GET  /api/wizard/interfaces        List network interfaces
+GET  /api/wizard/interfaces        List network interfaces (with MAC/state/speed/carrier)
+POST /api/wizard/configure-bridge  Create transparent L2 bridge (br0) from 2 NICs
 """
 
 from __future__ import annotations
@@ -106,6 +107,23 @@ class WizardApplyRequest(BaseModel):
 class WizardStatus(BaseModel):
     completed: bool
     redirect: Optional[str] = None
+
+
+class BridgeConfigRequest(BaseModel):
+    """Payload for POST /api/wizard/configure-bridge."""
+    wan_nic: str = Field(..., min_length=1)
+    lan_nic: str = Field(..., min_length=1)
+    mgmt_ip: Optional[str] = None
+    mgmt_mask: int = Field(default=24, ge=1, le=32)
+    gateway: str = ""
+    dns: List[str] = Field(default_factory=list)
+
+    @validator("lan_nic")
+    def lan_not_same_as_wan(cls, v, values):
+        wan = values.get("wan_nic")
+        if wan and v == wan:
+            raise ValueError("lan_nic must differ from wan_nic")
+        return v
 
 
 # -- Utility helpers ----------------------------------------------------------
@@ -313,6 +331,59 @@ async def _stream_apply_progress(
         except Exception:
             pass
 
+        # -- Factory snapshot (BTRFS appliances only) ----------------------
+        # If the root filesystem is BTRFS and snapper is available, take a
+        # "factory -- post-wizard" snapshot that the user can roll back to
+        # later from the admin panel.
+        try:
+            from snapshot_manager import (
+                create_factory_snapshot,
+                is_btrfs_root,
+            )
+            if is_btrfs_root():
+                yield sse(
+                    "factory_snapshot",
+                    "running",
+                    "Creating factory snapshot...",
+                )
+                loop = asyncio.get_event_loop()
+                snap_res = await loop.run_in_executor(
+                    None,
+                    create_factory_snapshot,
+                    "factory -- post-wizard",
+                )
+                if snap_res.get("success"):
+                    snap_id = snap_res.get("snapshot_id")
+                    if snap_res.get("already_existed"):
+                        msg = (
+                            f"Factory snapshot already exists (#{snap_id})"
+                            if snap_id is not None
+                            else "Factory snapshot already exists"
+                        )
+                    else:
+                        msg = (
+                            f"Factory snapshot created (#{snap_id})"
+                            if snap_id is not None
+                            else "Factory snapshot created"
+                        )
+                    yield sse("factory_snapshot", "done", msg)
+                else:
+                    yield sse(
+                        "factory_snapshot",
+                        "warning",
+                        f"Factory snapshot skipped: "
+                        f"{snap_res.get('error') or 'unknown error'}",
+                    )
+            else:
+                logger.debug("Root is not BTRFS -- skipping factory snapshot")
+        except Exception as exc:
+            logger.warning("Factory snapshot step failed: %s", exc)
+            yield sse(
+                "factory_snapshot",
+                "warning",
+                f"Factory snapshot skipped: {exc}",
+            )
+
         yield sse("complete", "done", "Setup complete!", done=True)
 
     except Exception as exc:
@@ -375,11 +446,77 @@ async def detect_system_state() -> Dict[str, Any]:
 
 @router.get("/interfaces")
 async def list_interfaces() -> Dict[str, Any]:
-    """List available network interfaces."""
+    """List available network interfaces with enough detail to identify
+    WAN vs LAN: MAC, operstate, carrier (cable plugged?), speed (Mbps),
+    and a hint whether the interface is virtual/bridge.
+    """
     from linux_configurator import LinuxConfigurator
     configurator = LinuxConfigurator()
     state = configurator.detect_state()
-    return {"interfaces": state.get("network_interfaces", [])}
+    ifaces = state.get("network_interfaces", [])
+    # Also enrich with IPv4 address if available -- helpful for the user.
+    try:
+        import socket
+        import fcntl
+        import struct
+        def _ip_for(ifname: str) -> Optional[str]:
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                try:
+                    # SIOCGIFADDR
+                    packed = fcntl.ioctl(
+                        s.fileno(),
+                        0x8915,
+                        struct.pack("256s", ifname[:15].encode()),
+                    )
+                    return socket.inet_ntoa(packed[20:24])
+                finally:
+                    s.close()
+            except Exception:
+                return None
+        for i in ifaces:
+            i["addr"] = _ip_for(i["name"])
+    except Exception:
+        # fcntl isn't available on every platform; ignore silently.
+        pass
+    return {"interfaces": ifaces}
+
+
+@router.post("/configure-bridge")
+async def configure_bridge(payload: BridgeConfigRequest) -> Dict[str, Any]:
+    """Create a transparent L2 bridge (``br0``) from two NICs.
+
+    Writes netplan + sysctl + modules-load configuration and returns the
+    applied config. The caller is expected to trigger ``netplan apply``
+    (or reboot) afterwards to activate the bridge.
+    """
+    from linux_configurator import LinuxConfigurator
+    configurator = LinuxConfigurator()
+    try:
+        import asyncio as _asyncio
+        loop = _asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: configurator.configure_bridge(
+                wan_nic=payload.wan_nic,
+                lan_nic=payload.lan_nic,
+                mgmt_ip=payload.mgmt_ip,
+                mgmt_mask=payload.mgmt_mask,
+                gateway=payload.gateway,
+                dns=payload.dns,
+            ),
+        )
+        if not result.get("success"):
+            raise HTTPException(
+                status_code=500,
+                detail=result.get("error", "configure_bridge failed"),
+            )
+        return result
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("configure_bridge error: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
 
 @router.get("/keywords")
 async def get_keywords() -> Dict[str, Any]:

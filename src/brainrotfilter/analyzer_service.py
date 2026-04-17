@@ -49,8 +49,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -1487,6 +1487,34 @@ async def api_system_status() -> Dict[str, Any]:
         return {"error": str(exc), "services": []}
 
 
+@app.post("/api/system/create-factory-snapshot")
+async def api_create_factory_snapshot():
+    from snapshot_manager import create_factory_snapshot
+    return create_factory_snapshot()
+
+
+@app.get("/api/system/snapshots")
+async def api_list_snapshots():
+    from snapshot_manager import list_snapshots
+    return {"snapshots": list_snapshots()}
+
+
+@app.post("/api/system/rollback")
+async def api_rollback():
+    from snapshot_manager import rollback_to_factory
+    return rollback_to_factory()
+
+
+@app.get("/api/system/factory-snapshot")
+async def api_factory_snapshot():
+    """Return the snapshot id currently flagged as the factory baseline."""
+    from snapshot_manager import get_factory_snapshot_id, is_btrfs_root
+    return {
+        "btrfs": is_btrfs_root(),
+        "snapshot_id": get_factory_snapshot_id(),
+    }
+
+
 @app.get("/status", response_class=HTMLResponse)
 async def system_status_page(request: Request) -> HTMLResponse:
     """Render the system status admin page."""
@@ -1499,6 +1527,38 @@ async def ca_cert_page(request: Request) -> HTMLResponse:
     """Persistent CA certificate download page (not just wizard-only)."""
     return _template_response(request, "ca_cert.html",
                               {"active_page": "ca_cert"})
+
+
+# ---------------------------------------------------------------------------
+# Configuration backup / restore
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/system/config/export")
+async def api_export_config():
+    """Download a gzipped tar bundle of the current configuration."""
+    from config_backup import export_config_bundle
+    data = export_config_bundle()
+    ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    return Response(
+        content=data,
+        media_type="application/gzip",
+        headers={"Content-Disposition": f"attachment; filename=brainrotfilter-{ts}.tar.gz"},
+    )
+
+
+@app.post("/api/system/config/import")
+async def api_import_config(file: UploadFile = File(...)):
+    """Restore configuration from an uploaded bundle; restarts the service."""
+    from config_backup import import_config_bundle
+    data = await file.read()
+    return import_config_bundle(data)
+
+
+@app.get("/backup", response_class=HTMLResponse)
+async def backup_page(request: Request):
+    """Admin page for configuration export / import."""
+    return _template_response(request, "backup.html", {"active_page": "backup"})
 
 
 @app.get("/version")

@@ -1,0 +1,65 @@
+# Absolute minimum packages for BrainrotFilter appliance.
+# Intentionally excludes: desktop, snap, cloud-init, telemetry,
+# discovery services, printing, bluetooth, wifi, mail, docs.
+
+# Kernel + base
+linux-image-generic
+linux-firmware
+initramfs-tools
+grub-pc
+systemd
+systemd-sysv
+dbus
+udev
+
+# Filesystem + storage
+btrfs-progs
+e2fsprogs
+parted
+
+# Network basics
+iproute2
+iputils-ping
+iptables
+iptables-persistent
+bridge-utils
+ebtables
+conntrack
+nftables
+netplan.io
+systemd-resolved
+
+# SSH (disabled by default, enabled via TUI)
+openssh-server
+
+# Shell + basic tools
+bash
+coreutils
+util-linux
+procps
+psmisc
+less
+nano
+ca-certificates
+sudo
+
+# AppArmor (hardening)
+apparmor
+apparmor-utils
+
+# Python runtime
+python3
+python3-venv
+python3-pip
+
+# BrainrotFilter runtime deps
+squid-openssl
+openssl
+curl
+ffmpeg
+dialog
+snapper
+python3-httpx
+
+# fail2ban for when SSH gets enabled
+fail2ban

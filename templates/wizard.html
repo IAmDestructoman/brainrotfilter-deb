@@ -796,30 +796,127 @@ input[type="range"]::-webkit-slider-thumb {
     </div>
 
     <!-- ================================================================ -->
-    <!-- Step 2: Network Interface                                        -->
+    <!-- Step 2: Network Setup (bridge vs single-NIC)                     -->
     <!-- ================================================================ -->
     <div class="step-panel" data-step="2">
-      <h2 class="step-title">Network Configuration</h2>
+      <h2 class="step-title">Network Setup</h2>
       <p class="step-subtitle">
-        Select the network interface to use for transparent proxy interception.
-        This is typically the LAN-facing interface on your gateway/router.
+        Choose how BrainrotFilter sits on your network. Transparent bridge
+        mode is recommended for physical appliances: both NICs become members
+        of an L2 bridge (<code>br0</code>) and client traffic passes through
+        unchanged. Single-NIC mode is for testing or VMs where you want to
+        intercept traffic on one interface only.
       </p>
 
-      <div class="form-group">
-        <label for="networkInterface">Network Interface</label>
-        <select id="networkInterface">
-          <option value="">Loading interfaces...</option>
-        </select>
-        <div class="form-hint">
-          Select the interface connected to your LAN. Traffic on this interface
-          will be transparently proxied through Squid.
+      <div class="ssl-pinning-option">
+        <div class="ssl-pinning-header">
+          <label class="toggle-switch">
+            <input type="radio" id="mode_bridge" name="net_mode" value="bridge" checked onchange="updateNetModeUI()">
+            <span class="toggle-slider"></span>
+          </label>
+          <div class="ssl-pinning-title">
+            <strong>Transparent bridge (2 NICs inline)</strong>
+            <span class="badge badge-enterprise">Appliance</span>
+          </div>
+        </div>
+        <div class="ssl-pinning-desc">
+          Plug WAN NIC to your uplink and LAN NIC to your switch. Both NICs
+          join <code>br0</code>; the appliance itself gets a management IP on
+          <code>br0</code>. Client traffic passes through transparently, with
+          iptables REDIRECT applied on the bridge.
         </div>
       </div>
 
-      <button class="btn btn-secondary" onclick="loadInterfaces()" id="btnRefreshIfaces">
-        Refresh Interfaces
-      </button>
-      <div class="connection-result" id="ifaceResult"></div>
+      <div class="ssl-pinning-option">
+        <div class="ssl-pinning-header">
+          <label class="toggle-switch">
+            <input type="radio" id="mode_single" name="net_mode" value="single" onchange="updateNetModeUI()">
+            <span class="toggle-slider"></span>
+          </label>
+          <div class="ssl-pinning-title">
+            <strong>Single-NIC proxy (testing / VM)</strong>
+            <span class="badge badge-easy">Simple</span>
+          </div>
+        </div>
+        <div class="ssl-pinning-desc">
+          One interface handles everything -- useful for VM labs or when you
+          only need to intercept traffic on a single LAN. No bridge is created.
+        </div>
+      </div>
+
+      <!-- Bridge-mode UI -->
+      <div id="bridgeModePane" style="margin-top:20px">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="wanNic">WAN NIC (uplink)</label>
+            <select id="wanNic"><option value="">Loading...</option></select>
+            <div class="form-hint">Faces your upstream router / ISP.</div>
+          </div>
+          <div class="form-group">
+            <label for="lanNic">LAN NIC (to switch)</label>
+            <select id="lanNic"><option value="">Loading...</option></select>
+            <div class="form-hint">Faces your clients.</div>
+          </div>
+        </div>
+
+        <button class="btn btn-secondary btn-sm" onclick="loadInterfaces()">Refresh interfaces</button>
+        <div class="connection-result" id="ifaceResult"></div>
+
+        <div id="nicInfo" style="margin-top:12px;font-size:12px;color:var(--text-muted);line-height:1.6"></div>
+
+        <hr style="border-color:var(--border);margin:20px 0">
+
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">Management IP: DHCP</div>
+            <div class="toggle-desc">Let your upstream DHCP server assign an IP to br0</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="mgmtDhcp" checked onchange="updateMgmtIpUI()">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div id="mgmtStaticPane" style="display:none;margin-top:12px">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="mgmtIp">Management IP</label>
+              <input type="text" id="mgmtIp" placeholder="192.168.1.10">
+            </div>
+            <div class="form-group">
+              <label for="mgmtMask">Prefix (CIDR)</label>
+              <input type="number" id="mgmtMask" value="24" min="1" max="32">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="mgmtGateway">Gateway</label>
+              <input type="text" id="mgmtGateway" placeholder="192.168.1.1">
+            </div>
+            <div class="form-group">
+              <label for="mgmtDns">DNS (comma-separated)</label>
+              <input type="text" id="mgmtDns" placeholder="1.1.1.1, 9.9.9.9">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Single-NIC UI -->
+      <div id="singleModePane" style="display:none;margin-top:20px">
+        <div class="form-group">
+          <label for="networkInterface">Network Interface</label>
+          <select id="networkInterface">
+            <option value="">Loading interfaces...</option>
+          </select>
+          <div class="form-hint">
+            Select the interface connected to your LAN. Traffic on this interface
+            will be transparently proxied through Squid.
+          </div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="loadInterfaces()" id="btnRefreshIfaces">
+          Refresh Interfaces
+        </button>
+      </div>
     </div>
 
     <!-- ================================================================ -->
@@ -1212,13 +1309,15 @@ input[type="range"]::-webkit-slider-thumb {
   var keywords = [];
   var systemState = null;
   var apiKeyVerified = false;
+  var networkMode = 'bridge';  // 'bridge' | 'single'
+  var lastInterfaceData = [];
 
   // -- Step indicator --
 
   function buildStepIndicator() {
     var el = document.getElementById('stepIndicator');
     el.innerHTML = '';
-    var labels = ['API Key', 'Network', 'Detection', 'Security', 'Apply', 'Done'];
+    var labels = ['API Key', 'Network Setup', 'Detection', 'Security', 'Apply', 'Done'];
     for (var i = 1; i <= TOTAL_STEPS; i++) {
       var wrap = document.createElement('div');
       wrap.className = 'step-dot-wrap';
@@ -1255,6 +1354,36 @@ input[type="range"]::-webkit-slider-thumb {
 
   window.goNext = function() {
     if (!validateStep(currentStep)) return;
+    // When leaving the Network Setup step in bridge mode, write the
+    // netplan/sysctl/modules-load config on the server before advancing.
+    if (currentStep === 2 && networkMode === 'bridge') {
+      var btn = document.getElementById('btnNext');
+      btn.disabled = true;
+      btn.textContent = 'Configuring bridge...';
+      configureBridgeOnServer()
+        .then(function(result) {
+          showResult('ifaceResult',
+            'Bridge configured (' + result.config.wan_nic + ' + ' + result.config.lan_nic +
+            ' -> br0). Apply with `netplan apply` or reboot.', 'success');
+          // Bridge is the active interface for subsequent iptables work.
+          var singleSel = document.getElementById('networkInterface');
+          if (singleSel) {
+            var opt = document.createElement('option');
+            opt.value = 'br0'; opt.textContent = 'br0 (transparent bridge)';
+            opt.selected = true;
+            singleSel.appendChild(opt);
+          }
+          goToStep(currentStep + 1);
+        })
+        .catch(function(e) {
+          showResult('ifaceResult', 'Bridge setup failed: ' + e.message, 'error');
+        })
+        .finally(function() {
+          btn.disabled = false;
+          btn.textContent = 'Next \u2192';
+        });
+      return;
+    }
     goToStep(currentStep + 1);
   };
 
@@ -1287,6 +1416,27 @@ input[type="range"]::-webkit-slider-thumb {
       return true;
     }
     if (step === 2) {
+      if (networkMode === 'bridge') {
+        var wan = document.getElementById('wanNic').value;
+        var lan = document.getElementById('lanNic').value;
+        if (!wan || !lan) {
+          showResult('ifaceResult', 'Please select both WAN and LAN NICs.', 'error');
+          return false;
+        }
+        if (wan === lan) {
+          showResult('ifaceResult', 'WAN and LAN NICs must be different interfaces.', 'error');
+          return false;
+        }
+        if (!document.getElementById('mgmtDhcp').checked) {
+          var ip = (document.getElementById('mgmtIp').value || '').trim();
+          if (!ip) {
+            showResult('ifaceResult', 'Enter a management IP or switch to DHCP.', 'error');
+            return false;
+          }
+        }
+        return true;
+      }
+      // single-NIC mode
       var iface = document.getElementById('networkInterface').value;
       if (!iface) {
         showResult('ifaceResult', 'Please select a network interface.', 'error');
@@ -1350,29 +1500,125 @@ input[type="range"]::-webkit-slider-thumb {
 
   // -- Network interfaces --
 
+  function _describeIface(i) {
+    var bits = [];
+    if (i.mac) bits.push(i.mac);
+    if (i.state) bits.push(i.state);
+    if (i.carrier === true) bits.push('link up');
+    else if (i.carrier === false) bits.push('no cable');
+    if (i.speed && i.speed > 0) bits.push(i.speed + ' Mbps');
+    if (i.addr) bits.push(i.addr);
+    return bits.join(' | ');
+  }
+
+  function _populateSelect(sel, ifaces, filter, selectedVal) {
+    sel.innerHTML = '';
+    var shown = 0;
+    for (var i = 0; i < ifaces.length; i++) {
+      var it = ifaces[i];
+      if (filter && !filter(it)) continue;
+      var opt = document.createElement('option');
+      opt.value = it.name;
+      var label = it.name;
+      var desc = _describeIface(it);
+      if (desc) label += '  --  ' + desc;
+      opt.textContent = label;
+      if (selectedVal && it.name === selectedVal) opt.selected = true;
+      sel.appendChild(opt);
+      shown++;
+    }
+    if (shown === 0) {
+      sel.innerHTML = '<option value="">No interfaces detected</option>';
+    }
+  }
+
+  function _renderNicInfo(ifaces) {
+    var box = document.getElementById('nicInfo');
+    if (!box) return;
+    var html = '<strong style="color:var(--text-secondary)">Detected NICs:</strong><br>';
+    for (var i = 0; i < ifaces.length; i++) {
+      var it = ifaces[i];
+      if (it.is_bridge || it.is_virtual) continue;
+      html += '&bull; <code>' + escapeHtml(it.name) + '</code> &mdash; ' + escapeHtml(_describeIface(it)) + '<br>';
+    }
+    box.innerHTML = html;
+  }
+
   window.loadInterfaces = function() {
     fetch('/api/wizard/interfaces')
     .then(function(resp) { return resp.json(); })
     .then(function(data) {
-      var sel = document.getElementById('networkInterface');
-      sel.innerHTML = '';
       var ifaces = data.interfaces || [];
+      lastInterfaceData = ifaces;
+
+      // Physical NICs only for the bridge selectors.
+      var physical = function(it) { return !it.is_bridge && !it.is_virtual; };
+
+      var wanSel = document.getElementById('wanNic');
+      var lanSel = document.getElementById('lanNic');
+      var singleSel = document.getElementById('networkInterface');
+
+      if (wanSel) _populateSelect(wanSel, ifaces, physical, ifaces[0] && ifaces[0].name);
+      if (lanSel) _populateSelect(lanSel, ifaces, physical, ifaces[1] && ifaces[1].name);
+      if (singleSel) _populateSelect(singleSel, ifaces, null, null);
+      _renderNicInfo(ifaces);
+
       if (ifaces.length === 0) {
-        sel.innerHTML = '<option value="">No interfaces detected</option>';
-        return;
+        showResult('ifaceResult', 'No interfaces detected', 'error');
+      } else {
+        showResult('ifaceResult', 'Found ' + ifaces.length + ' interface(s)', 'success');
       }
-      for (var i = 0; i < ifaces.length; i++) {
-        var opt = document.createElement('option');
-        opt.value = ifaces[i].name;
-        opt.textContent = ifaces[i].name + (ifaces[i].addr ? ' (' + ifaces[i].addr + ')' : '');
-        sel.appendChild(opt);
-      }
-      showResult('ifaceResult', 'Found ' + ifaces.length + ' interface(s)', 'success');
     })
     .catch(function(e) {
       showResult('ifaceResult', 'Error loading interfaces: ' + e.message, 'error');
     });
   };
+
+  window.updateNetModeUI = function() {
+    var bridge = document.getElementById('mode_bridge').checked;
+    networkMode = bridge ? 'bridge' : 'single';
+    document.getElementById('bridgeModePane').style.display = bridge ? 'block' : 'none';
+    document.getElementById('singleModePane').style.display = bridge ? 'none' : 'block';
+  };
+
+  window.updateMgmtIpUI = function() {
+    var dhcp = document.getElementById('mgmtDhcp').checked;
+    document.getElementById('mgmtStaticPane').style.display = dhcp ? 'none' : 'block';
+  };
+
+  function configureBridgeOnServer() {
+    var wan = document.getElementById('wanNic').value;
+    var lan = document.getElementById('lanNic').value;
+    var dhcp = document.getElementById('mgmtDhcp').checked;
+    var payload = {
+      wan_nic: wan,
+      lan_nic: lan,
+      mgmt_mask: 24,
+      gateway: '',
+      dns: [],
+    };
+    if (!dhcp) {
+      payload.mgmt_ip = (document.getElementById('mgmtIp').value || '').trim();
+      payload.mgmt_mask = parseInt(document.getElementById('mgmtMask').value, 10) || 24;
+      payload.gateway = (document.getElementById('mgmtGateway').value || '').trim();
+      var dnsRaw = (document.getElementById('mgmtDns').value || '').trim();
+      if (dnsRaw) {
+        payload.dns = dnsRaw.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+      }
+    }
+    return fetch('/api/wizard/configure-bridge', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+    }).then(function(r) {
+      if (!r.ok) {
+        return r.json().then(function(j) {
+          throw new Error(j.detail || ('HTTP ' + r.status));
+        });
+      }
+      return r.json();
+    });
+  }
 
   // -- System state detection --
 
@@ -1513,7 +1759,14 @@ input[type="range"]::-webkit-slider-thumb {
   // -- Review summary --
 
   function buildReviewSummary() {
-    var iface = document.getElementById('networkInterface').value || 'auto';
+    var iface;
+    if (networkMode === 'bridge') {
+      iface = 'br0 (bridge: ' +
+        document.getElementById('wanNic').value + ' + ' +
+        document.getElementById('lanNic').value + ')';
+    } else {
+      iface = document.getElementById('networkInterface').value || 'auto';
+    }
     var kwW = (parseInt(document.getElementById('kwWeight').value)/100).toFixed(2);
     var scW = (parseInt(document.getElementById('sceneWeight').value)/100).toFixed(2);
     var auW = (parseInt(document.getElementById('audioWeight').value)/100).toFixed(2);
@@ -1583,9 +1836,12 @@ input[type="range"]::-webkit-slider-thumb {
       progressEl.appendChild(div);
     }
 
+    var selectedIface = (networkMode === 'bridge')
+      ? 'br0'
+      : document.getElementById('networkInterface').value;
     var payload = {
       api_key: document.getElementById('apiKey').value.trim(),
-      network_interface: document.getElementById('networkInterface').value,
+      network_interface: selectedIface,
       thresholds: {
         keyword_weight: parseInt(document.getElementById('kwWeight').value) / 100,
         scene_weight: parseInt(document.getElementById('sceneWeight').value) / 100,
@@ -1819,6 +2075,8 @@ input[type="range"]::-webkit-slider-thumb {
   buildStepIndicator();
   updateNav();
   runHealthCheck();
+  if (typeof window.updateNetModeUI === 'function') window.updateNetModeUI();
+  if (typeof window.updateMgmtIpUI === 'function') window.updateMgmtIpUI();
 
 })();
 </script>

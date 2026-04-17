@@ -1,0 +1,93 @@
+#!/bin/bash
+# Hardening sysctls + module blacklist inside the chroot.
+set -e
+
+echo "[brainrot-iso] Applying hardening..."
+
+# Module blacklist
+cat > /etc/modprobe.d/brainrotfilter-blacklist.conf <<'EOF'
+# Unused kernel modules -- reduce attack surface
+blacklist usb-storage
+blacklist firewire-core
+blacklist firewire-ohci
+blacklist firewire-sbp2
+blacklist thunderbolt
+blacklist cifs
+blacklist nfs
+blacklist nfsv3
+blacklist nfsv4
+blacklist freevxfs
+blacklist jffs2
+blacklist hfs
+blacklist hfsplus
+blacklist squashfs
+blacklist udf
+blacklist dccp
+blacklist sctp
+blacklist rds
+blacklist tipc
+EOF
+
+# Sysctl hardening
+cat > /etc/sysctl.d/99-brainrotfilter-harden.conf <<'EOF'
+# IP hardening
+net.ipv4.conf.all.accept_redirects = 0
+net.ipv4.conf.default.accept_redirects = 0
+net.ipv6.conf.all.accept_redirects = 0
+net.ipv4.conf.all.send_redirects = 0
+net.ipv4.conf.default.send_redirects = 0
+net.ipv4.conf.all.accept_source_route = 0
+net.ipv4.conf.default.accept_source_route = 0
+net.ipv6.conf.all.accept_source_route = 0
+net.ipv4.conf.all.log_martians = 1
+net.ipv4.icmp_echo_ignore_broadcasts = 1
+net.ipv4.icmp_ignore_bogus_error_responses = 1
+
+# Kernel hardening
+kernel.dmesg_restrict = 1
+kernel.kptr_restrict = 2
+kernel.yama.ptrace_scope = 1
+kernel.kexec_load_disabled = 1
+
+# Filesystem hardening
+fs.protected_symlinks = 1
+fs.protected_hardlinks = 1
+fs.protected_fifos = 2
+fs.protected_regular = 2
+fs.suid_dumpable = 0
+EOF
+
+# SSH config - secure defaults (sshd disabled by default but ready if enabled)
+cat > /etc/ssh/sshd_config.d/99-brainrotfilter.conf <<'EOF'
+# BrainrotFilter appliance SSH hardening
+PermitRootLogin no
+PasswordAuthentication no
+PubkeyAuthentication yes
+X11Forwarding no
+AllowAgentForwarding no
+AllowTcpForwarding no
+PermitEmptyPasswords no
+MaxAuthTries 3
+LoginGraceTime 30
+Protocol 2
+EOF
+
+# Ensure SSH is OFF at first boot (TUI option 7 enables it)
+systemctl disable ssh.service 2>/dev/null || true
+systemctl mask ssh.service 2>/dev/null || true
+
+# Switch getty@tty1 to auto-login to brainrot TUI
+mkdir -p /etc/systemd/system/getty@tty1.service.d
+cat > /etc/systemd/system/getty@tty1.service.d/autologin.conf <<'EOF'
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty -o '-p -- appliance' --noclear --autologin appliance %I $TERM
+EOF
+
+# Create the appliance user (no password, no shell — goes straight to TUI)
+if ! getent passwd appliance >/dev/null; then
+    useradd -m -s /usr/lib/brainrotfilter/tui/console_tui.py -G sudo appliance
+    passwd -d appliance
+fi
+
+echo "[brainrot-iso] Hardening applied."

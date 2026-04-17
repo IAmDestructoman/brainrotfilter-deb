@@ -127,23 +127,41 @@ class LinuxConfigurator:
         r = self._run(["systemctl", "is-active", "brainrotfilter"])
         state["service_active"] = r.stdout.strip() == "active"
 
-        # List network interfaces
+        # List network interfaces -- include MAC, operstate, carrier, and
+        # link speed so the wizard can help the user identify WAN vs LAN.
         try:
             interfaces = []
             for iface in Path("/sys/class/net").iterdir():
                 name = iface.name
                 if name == "lo":
                     continue
+                info: Dict[str, Any] = {
+                    "name": name,
+                    "mac": "",
+                    "state": "unknown",
+                    "carrier": None,
+                    "speed": None,
+                    "is_bridge": (iface / "bridge").exists(),
+                    "is_virtual": name.startswith(("br", "veth", "docker", "tun", "tap", "wg")),
+                }
                 try:
-                    addr_info = (iface / "address").read_text().strip()
-                    operstate = (iface / "operstate").read_text().strip()
-                    interfaces.append({
-                        "name": name,
-                        "mac": addr_info,
-                        "state": operstate,
-                    })
+                    info["mac"] = (iface / "address").read_text().strip()
                 except Exception:
-                    interfaces.append({"name": name, "mac": "", "state": "unknown"})
+                    pass
+                try:
+                    info["state"] = (iface / "operstate").read_text().strip()
+                except Exception:
+                    pass
+                try:
+                    info["carrier"] = (iface / "carrier").read_text().strip() == "1"
+                except Exception:
+                    info["carrier"] = None
+                try:
+                    raw = (iface / "speed").read_text().strip()
+                    info["speed"] = int(raw) if raw.lstrip("-").isdigit() else None
+                except Exception:
+                    info["speed"] = None
+                interfaces.append(info)
             state["network_interfaces"] = interfaces
         except Exception:
             pass
@@ -430,12 +448,217 @@ adaptation_access brainrot_yti deny all
 
         return {"success": True, "config_path": str(conf_path)}
 
+    # -- Transparent L2 Bridge --------------------------------------------
+
+    def configure_bridge(
+        self,
+        wan_nic: str,
+        lan_nic: str,
+        mgmt_ip: Optional[str] = None,
+        mgmt_mask: int = 24,
+        gateway: str = "",
+        dns: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Configure a transparent L2 bridge across two NICs.
+
+        Writes a netplan config creating ``br0`` with ``wan_nic`` and
+        ``lan_nic`` as members (STP disabled -- we don't want the box to
+        participate in spanning-tree decisions of the upstream network).
+        The management IP lives on ``br0`` itself, either static or DHCP.
+
+        Also ensures ``br_netfilter`` is loaded and the corresponding sysctl
+        knobs are set so that iptables sees bridged traffic -- without this
+        the PREROUTING REDIRECT rules would never match bridged packets.
+
+        Parameters
+        ----------
+        wan_nic, lan_nic : str
+            Interface names for the WAN-facing and LAN-facing NICs. Both
+            become members of br0 (L2). The distinction is only meaningful
+            as a label -- both NICs are treated identically at L2.
+        mgmt_ip : Optional[str]
+            Static management IP to assign to br0 (e.g. "192.168.1.10").
+            When ``None`` the bridge falls back to DHCP.
+        mgmt_mask : int
+            CIDR prefix length for the management IP (default /24).
+        gateway : str
+            Default gateway for the management interface (ignored for DHCP).
+        dns : Optional[List[str]]
+            DNS servers to configure on br0 (ignored for DHCP).
+        """
+        dns = dns or []
+        netplan_dir = Path("/etc/netplan")
+        bridge_yaml = netplan_dir / "99-brainrotfilter-bridge.yaml"
+        cloud_init_yaml = netplan_dir / "50-cloud-init.yaml"
+
+        # Build the br0 config block.
+        if mgmt_ip:
+            addr_line = f"      addresses: [{mgmt_ip}/{mgmt_mask}]\n"
+            if gateway:
+                # routes: is the modern netplan equivalent of gateway4.
+                addr_line += (
+                    "      routes:\n"
+                    f"        - to: default\n"
+                    f"          via: {gateway}\n"
+                )
+            if dns:
+                ns_list = ", ".join(dns)
+                addr_line += (
+                    "      nameservers:\n"
+                    f"        addresses: [{ns_list}]\n"
+                )
+            dhcp_line = "      dhcp4: false\n"
+        else:
+            addr_line = ""
+            dhcp_line = "      dhcp4: true\n"
+
+        netplan_content = (
+            "# BrainrotFilter transparent-bridge netplan config\n"
+            "# Auto-generated by the wizard. Edit at your own risk.\n"
+            "network:\n"
+            "  version: 2\n"
+            "  renderer: networkd\n"
+            "  ethernets:\n"
+            f"    {wan_nic}:\n"
+            "      dhcp4: false\n"
+            "      dhcp6: false\n"
+            "      optional: true\n"
+            f"    {lan_nic}:\n"
+            "      dhcp4: false\n"
+            "      dhcp6: false\n"
+            "      optional: true\n"
+            "  bridges:\n"
+            "    br0:\n"
+            f"      interfaces: [{wan_nic}, {lan_nic}]\n"
+            "      parameters:\n"
+            "        stp: false\n"
+            "        forward-delay: 0\n"
+            f"{dhcp_line}"
+            f"{addr_line}"
+        )
+
+        try:
+            netplan_dir.mkdir(parents=True, exist_ok=True)
+            bridge_yaml.write_text(netplan_content)
+            os.chmod(str(bridge_yaml), 0o600)
+        except Exception as exc:
+            return {"success": False, "error": f"Could not write {bridge_yaml}: {exc}"}
+
+        # Comment out any `dhcp4: true` on the individual NICs in the
+        # cloud-init netplan so we don't fight for the interfaces.
+        cloud_init_patched = False
+        if cloud_init_yaml.exists():
+            try:
+                original = cloud_init_yaml.read_text()
+                patched_lines = []
+                # We only rewrite lines that live under a matching NIC stanza.
+                current_iface = None
+                for line in original.splitlines():
+                    stripped = line.strip()
+                    # Detect top-level interface entries (two-space indent under
+                    # `ethernets:` is the typical cloud-init layout).
+                    if stripped.endswith(":") and not stripped.startswith("#"):
+                        name = stripped.rstrip(":").strip()
+                        if name in (wan_nic, lan_nic):
+                            current_iface = name
+                        elif line[:2] == "  " and line[2:3] != " ":
+                            # New top-level key -- reset.
+                            current_iface = None
+                    if current_iface and "dhcp4:" in line and "true" in line.lower():
+                        # Prefix comment preserving indent.
+                        indent = line[: len(line) - len(line.lstrip())]
+                        patched_lines.append(
+                            f"{indent}# dhcp4: true  # disabled by BrainrotFilter bridge setup"
+                        )
+                        cloud_init_patched = True
+                        continue
+                    patched_lines.append(line)
+                if cloud_init_patched:
+                    # Back up once, then rewrite.
+                    backup = cloud_init_yaml.with_suffix(
+                        cloud_init_yaml.suffix + ".brainrotfilter.bak"
+                    )
+                    if not backup.exists():
+                        backup.write_text(original)
+                    cloud_init_yaml.write_text("\n".join(patched_lines) + "\n")
+            except Exception as exc:
+                logger.warning("Could not patch %s: %s", cloud_init_yaml, exc)
+
+        # Ensure br_netfilter is loaded at boot.
+        try:
+            modules_conf = Path("/etc/modules-load.d/brainrotfilter.conf")
+            modules_conf.parent.mkdir(parents=True, exist_ok=True)
+            modules_conf.write_text("br_netfilter\n")
+        except Exception as exc:
+            return {"success": False, "error": f"Could not write modules-load conf: {exc}"}
+
+        # Load the module right now so sysctl knobs exist.
+        self._run(["modprobe", "br_netfilter"])
+
+        # Bridge-netfilter sysctls -- iptables must see bridged packets,
+        # arptables must not (arp on a transparent bridge should stay L2).
+        try:
+            sysctl_bridge = Path("/etc/sysctl.d/99-brainrotfilter-bridge.conf")
+            sysctl_bridge.parent.mkdir(parents=True, exist_ok=True)
+            sysctl_bridge.write_text(
+                "net.bridge.bridge-nf-call-iptables=1\n"
+                "net.bridge.bridge-nf-call-ip6tables=1\n"
+                "net.bridge.bridge-nf-call-arptables=0\n"
+            )
+            # Apply immediately, ignoring errors (module may not be up yet
+            # on first run; reboot / `netplan apply` will pick it up).
+            for key, val in (
+                ("net.bridge.bridge-nf-call-iptables", "1"),
+                ("net.bridge.bridge-nf-call-ip6tables", "1"),
+                ("net.bridge.bridge-nf-call-arptables", "0"),
+            ):
+                self._run(["sysctl", "-w", f"{key}={val}"])
+        except Exception as exc:
+            return {"success": False, "error": f"Could not write sysctl conf: {exc}"}
+
+        # Record the bridge interface on the config so subsequent
+        # setup_iptables() calls default to br0.
+        self.config.network_interface = "br0"
+
+        applied = {
+            "wan_nic": wan_nic,
+            "lan_nic": lan_nic,
+            "bridge": "br0",
+            "mgmt_ip": mgmt_ip,
+            "mgmt_mask": mgmt_mask,
+            "gateway": gateway,
+            "dns": dns,
+            "dhcp": mgmt_ip is None,
+            "netplan_file": str(bridge_yaml),
+            "cloud_init_patched": cloud_init_patched,
+        }
+
+        return {"success": True, "config": applied}
+
     # -- iptables Rules ----------------------------------------------------
 
-    def setup_iptables(self) -> Dict[str, Any]:
-        """Set up iptables rules for transparent proxy and QUIC blocking."""
+    def setup_iptables(self, interface: Optional[str] = None) -> Dict[str, Any]:
+        """Set up iptables rules for transparent proxy and QUIC blocking.
+
+        Parameters
+        ----------
+        interface : Optional[str]
+            The interface to apply PREROUTING REDIRECT rules to. When running
+            in transparent-bridge mode this should be ``br0`` so that the
+            bridge's virtual interface is matched (bridged packets traverse
+            nf_call_iptables and hit PREROUTING). When ``None`` the value
+            from ``self.config.network_interface`` is used (single-NIC mode).
+        """
         results = {"success": True, "rules_added": 0, "errors": []}
-        iface = self.config.network_interface
+        iface = interface or self.config.network_interface
+        # Detect bridge-mode so we can skip NAT MASQUERADE. Bridge mode is a
+        # pure L2 transparent interception -- there is no routing decision
+        # being made on this box, so masquerading would be wrong (and break
+        # the return path). We ONLY install PREROUTING REDIRECT + FORWARD DROP
+        # rules; no POSTROUTING MASQUERADE is ever added here.
+        bridge_mode = iface.startswith("br")
+        results["bridge_mode"] = bridge_mode
+        results["interface"] = iface
 
         # Enable IP forwarding
         if self.config.enable_ip_forward:
