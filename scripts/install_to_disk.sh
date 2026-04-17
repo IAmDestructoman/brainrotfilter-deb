@@ -96,20 +96,29 @@ done
 wipefs -a "$TARGET" >/dev/null 2>&1 || true
 sgdisk --zap-all "$TARGET" >/dev/null 2>&1 || true
 
-# -- Partition: GPT, 512 MiB EFI (FAT32) + rest ext4 --
+# -- Partition: GPT with
+#     1  1 MiB     BIOS Boot Partition (type ef02, no filesystem)
+#     2  512 MiB   EFI System Partition (FAT32, type ef00)
+#     3  rest      brainrot-root (ext4)
+# The BIOS Boot Partition is where GRUB embeds its i386-pc stage on
+# GPT disks; without it `grub-install --target=i386-pc` refuses to
+# proceed ("GPT partition label contains no BIOS Boot Partition").
+# UEFI-only boxes ignore it; BIOS-only boxes need it.
 echo "Partitioning..."
 parted -s "$TARGET" mklabel gpt
-parted -s "$TARGET" mkpart ESP fat32 1MiB 513MiB
-parted -s "$TARGET" set 1 esp on
-parted -s "$TARGET" set 1 boot on
-parted -s "$TARGET" mkpart brainrot-root ext4 513MiB 100%
+parted -s "$TARGET" mkpart BIOS-boot 1MiB 2MiB
+parted -s "$TARGET" set 1 bios_grub on
+parted -s "$TARGET" mkpart ESP fat32 2MiB 514MiB
+parted -s "$TARGET" set 2 esp on
+parted -s "$TARGET" set 2 boot on
+parted -s "$TARGET" mkpart brainrot-root ext4 514MiB 100%
 partprobe "$TARGET" 2>/dev/null || true
 udevadm settle
 
 # nvme / mmcblk use <dev>p<n>, everything else uses <dev><n>
 case "$TARGET" in
-    *nvme*|*mmcblk*) P_ESP="${TARGET}p1"; P_ROOT="${TARGET}p2" ;;
-    *)               P_ESP="${TARGET}1";  P_ROOT="${TARGET}2" ;;
+    *nvme*|*mmcblk*) P_ESP="${TARGET}p2"; P_ROOT="${TARGET}p3" ;;
+    *)               P_ESP="${TARGET}2";  P_ROOT="${TARGET}3" ;;
 esac
 
 echo "Formatting..."
@@ -147,15 +156,18 @@ done
 
 # Individual files: account databases for the operator's root password
 # (set via TUI option 3 or 7) + anything else modified at runtime.
+# NB: `[ -f "$f" ] && cp ...` under `set -e` exits the script when the
+# test fails (e.g. /etc/subuid missing on a stripped image). Use `if`.
 for f in /etc/passwd /etc/shadow /etc/group /etc/gshadow /etc/subuid /etc/subgid; do
-    [ -f "$f" ] && cp -a "$f" "$MNT$f"
+    if [ -f "$f" ]; then
+        cp -a "$f" "$MNT$f"
+    fi
 done
 
 # Preserve "unit enable state" by mirroring selected target.wants
 # symlink directories. This carries over:
 #   - SSH enabled/unmasked state (sockets.target.wants/ssh.socket,
 #     multi-user.target.wants/ssh.service)
-#   - Mask state (symlinks in /etc/systemd/system/*.service -> /dev/null)
 for wants in /etc/systemd/system/multi-user.target.wants \
              /etc/systemd/system/sockets.target.wants \
              /etc/systemd/system/network-pre.target.wants \
@@ -166,22 +178,19 @@ for wants in /etc/systemd/system/multi-user.target.wants \
     fi
 done
 
-# Mask-symlinks (ssh.service -> /dev/null et al) live directly in
-# /etc/systemd/system/, not under a target.wants dir.
-for mask in /etc/systemd/system/*.service /etc/systemd/system/*.socket; do
-    [ -L "$mask" ] && cp -a "$mask" "$MNT$mask" 2>/dev/null || true
+# Mask symlinks (ssh.service -> /dev/null et al) + non-mask symlinks
+# live directly in /etc/systemd/system/. Use `find` so no-match doesn't
+# leak the literal glob into the loop body.
+find /etc/systemd/system -maxdepth 1 -type l 2>/dev/null | while read -r ln; do
+    cp -a "$ln" "$MNT$ln" 2>/dev/null || true
 done
 
-# Copy any non-mask unit overrides too (e.g. getty@tty1.service.d/
-# autologin.conf was written by the harden hook at build time and is
-# already in the squashfs, but operator customizations land here).
-for override_dir in /etc/systemd/system/*.service.d \
-                    /etc/systemd/system/*.socket.d; do
-    if [ -d "$override_dir" ]; then
-        rel="${override_dir#/}"
-        mkdir -p "$MNT/$rel"
-        cp -a "$override_dir/." "$MNT/$rel/" 2>/dev/null || true
-    fi
+# Unit override directories (e.g. getty@tty1.service.d/autologin.conf)
+# — shipped in the squashfs by the harden hook, but copy again in case
+# the operator customized them at runtime.
+find /etc/systemd/system -maxdepth 1 -type d -name '*.d' 2>/dev/null | while read -r d; do
+    mkdir -p "$MNT$d"
+    cp -a "$d/." "$MNT$d/" 2>/dev/null || true
 done
 
 # -- fstab --
