@@ -1494,6 +1494,13 @@ async def system_status_page(request: Request) -> HTMLResponse:
                               {"active_page": "status"})
 
 
+@app.get("/ca-cert", response_class=HTMLResponse)
+async def ca_cert_page(request: Request) -> HTMLResponse:
+    """Persistent CA certificate download page (not just wizard-only)."""
+    return _template_response(request, "ca_cert.html",
+                              {"active_page": "ca_cert"})
+
+
 @app.get("/version")
 async def version_info() -> Dict[str, Any]:
     """Return version and build info."""

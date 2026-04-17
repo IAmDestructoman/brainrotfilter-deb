@@ -275,7 +275,7 @@ ssl_bump splice all
 # request, which swamps the helper pool and stalls the home page.
 acl brainrot_rewrite_url url_regex -i youtube\\.com/watch youtube\\.com/shorts/ youtube\\.com/embed/ youtu\\.be/ youtube\\.com/api/stats/watchtime youtube\\.com/api/stats/qoe youtube\\.com/api/stats/playback youtube\\.com/youtubei/v1/player youtube\\.com/youtubei/v1/next ytimg\\.com/sb/
 url_rewrite_program {SCRIPTS_DIR}/squid_redirector.sh
-url_rewrite_children 20 startup=3 idle=1 concurrency=0
+url_rewrite_children 20 startup=3 idle=1 concurrency=1
 url_rewrite_access allow brainrot_rewrite_url
 url_rewrite_access deny all
 url_rewrite_bypass on
@@ -291,6 +291,18 @@ no_cache deny youtube_nocache
 # catch-all so this snippet works even if inserted before deny all.
 http_access allow localnet
 http_access allow localhost
+
+# -- Misc --
+host_verify_strict off
+
+# -- ICAP integration --
+# Intercept youtubei player/next POST bodies for brainrot classification.
+acl youtube_youtubei_url url_regex -i youtube\\.com/youtubei/v1/(player|next)
+icap_enable on
+icap_service brainrot_req reqmod_precache icap://127.0.0.1:1344/brainrot bypass=on
+adaptation_service_set brainrot_yti brainrot_req
+adaptation_access brainrot_yti allow youtube_youtubei_url
+adaptation_access brainrot_yti deny all
 """
 
         conf_path = CONFIG_DIR / "squid_brainrot.conf"
@@ -321,7 +333,7 @@ http_access allow localhost
             "# Squid's url_regex is evaluated cheaply and short-circuits before any\n"
             "# expensive external helper is invoked. Thumbnails, qoe telemetry,\n"
             "# youtubei metadata, and home-feed API calls skip the helpers entirely.\n"
-            "acl youtube_playback_url url_regex -i youtube\\.com/watch youtube\\.com/shorts/ youtube\\.com/embed/ youtu\\.be/ youtube\\.com/api/stats/watchtime youtube\\.com/api/stats/qoe youtube\\.com/api/stats/playback ytimg\\.com/sb/\n"
+            "acl youtube_playback_url url_regex -i youtube\\.com/watch youtube\\.com/shorts/ youtube\\.com/embed/ youtu\\.be/ youtube\\.com/api/stats/watchtime youtube\\.com/api/stats/qoe youtube\\.com/api/stats/playback youtube\\.com/youtubei/v1/player youtube\\.com/youtubei/v1/next ytimg\\.com/sb/\n"
             "\n"
             "# Hard-block tier (status=block) -- redirect to block page\n"
             f"external_acl_type brainrot_block_check children-max=20 children-startup=3 ttl=60 negative_ttl=30 %URI %SRC {SCRIPTS_DIR}/squid_acl_helper.sh block\n"
@@ -345,6 +357,12 @@ http_access allow localhost
             "acl brainrot_client_pending external brainrot_cdn_pending\n"
             "acl youtube_cdn_domains dstdomain .googlevideo.com\n"
             "http_access deny brainrot_client_pending youtube_cdn_domains\n"
+            "\n"
+            "# ICAP body-inspection shim — allow the brainrotfilter shim URL\n"
+            "# so the ICAP client can POST captured request bodies back to the\n"
+            "# local service for classification.\n"
+            f"acl brainrot_shim_url url_regex -i http://{_redirect_ip}:{_port}/icap_shim\n"
+            "http_access allow brainrot_shim_url\n"
         )
         confd_request = DATA_DIR / "squid_confd_content"
         try:
@@ -557,12 +575,21 @@ http_access allow localhost
             else:
                 logger.warning("Helper script not found: %s", src)
 
+        # Detect the gateway IP dynamically (same socket trick as configure_squid)
+        import socket as _socket
+        try:
+            with _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM) as _s:
+                _s.connect(("8.8.8.8", 80))
+                _gateway_ip = _s.getsockname()[0]
+        except Exception:
+            _gateway_ip = "127.0.0.1"
+
         # Write environment config
         env_path = CONFIG_DIR / "brainrotfilter.env"
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         env_path.write_text(
             f"BRAINROT_API={service_url}\n"
-            f"GATEWAY_IP=127.0.0.1\n"
+            f"GATEWAY_IP={_gateway_ip}\n"
         )
 
         return {"success": True, "installed": installed}

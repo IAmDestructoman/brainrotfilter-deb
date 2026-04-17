@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block title %}CA Certificate{% endblock %}
+{% block page_title %}CA Certificate{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>CA Certificate</h1>
+    <div class="subtitle">Download and install the BrainrotFilter CA certificate on your devices</div>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:24px">
+  <div class="card-header">
+    <span class="card-title">Download Certificate</span>
+  </div>
+  <div style="padding:16px">
+    <p class="text-dim" style="margin-bottom:12px">
+      BrainrotFilter uses SSL interception to analyze YouTube traffic. Each device on your network
+      needs to trust the BrainrotFilter CA certificate for HTTPS filtering to work without browser warnings.
+    </p>
+    <a href="/api/wizard/ca-export" class="btn btn-secondary" download="brainrotfilter-ca.pem">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+        <polyline points="7,10 12,15 17,10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      Download CA Certificate (.pem)
+    </a>
+    <div id="ca-fingerprint" class="text-dim" style="margin-top:12px;font-family:var(--font-mono);font-size:0.72rem"></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Installation Instructions</span>
+  </div>
+  <div style="padding:16px">
+
+    <details style="margin-bottom:16px">
+      <summary style="cursor:pointer;font-weight:600;font-size:0.9rem;padding:8px 0">
+        Windows 10/11
+      </summary>
+      <div style="padding:8px 16px;font-size:0.85rem;color:var(--text-muted)">
+        <ol>
+          <li>Download the .pem file above</li>
+          <li>Double-click the file → click <strong>Install Certificate</strong></li>
+          <li>Select <strong>Local Machine</strong> → Next</li>
+          <li>Select <strong>Place all certificates in the following store</strong> → Browse</li>
+          <li>Select <strong>Trusted Root Certification Authorities</strong> → OK → Next → Finish</li>
+          <li>Restart your browser</li>
+        </ol>
+      </div>
+    </details>
+
+    <details style="margin-bottom:16px">
+      <summary style="cursor:pointer;font-weight:600;font-size:0.9rem;padding:8px 0">
+        macOS
+      </summary>
+      <div style="padding:8px 16px;font-size:0.85rem;color:var(--text-muted)">
+        <ol>
+          <li>Download the .pem file above</li>
+          <li>Double-click to open in Keychain Access</li>
+          <li>Add to the <strong>System</strong> keychain</li>
+          <li>Find the certificate, double-click it</li>
+          <li>Expand <strong>Trust</strong> → set "When using this certificate" to <strong>Always Trust</strong></li>
+          <li>Close and enter your password to confirm</li>
+        </ol>
+      </div>
+    </details>
+
+    <details style="margin-bottom:16px">
+      <summary style="cursor:pointer;font-weight:600;font-size:0.9rem;padding:8px 0">
+        iOS / iPadOS
+      </summary>
+      <div style="padding:8px 16px;font-size:0.85rem;color:var(--text-muted)">
+        <ol>
+          <li>Open this page on your iOS device and tap the download link</li>
+          <li>Tap <strong>Allow</strong> when prompted to download the profile</li>
+          <li>Go to <strong>Settings → General → VPN & Device Management</strong></li>
+          <li>Tap the <strong>BrainrotFilter CA</strong> profile → Install</li>
+          <li>Go to <strong>Settings → General → About → Certificate Trust Settings</strong></li>
+          <li>Enable full trust for <strong>BrainrotFilter CA</strong></li>
+        </ol>
+      </div>
+    </details>
+
+    <details style="margin-bottom:16px">
+      <summary style="cursor:pointer;font-weight:600;font-size:0.9rem;padding:8px 0">
+        Android
+      </summary>
+      <div style="padding:8px 16px;font-size:0.85rem;color:var(--text-muted)">
+        <ol>
+          <li>Download the .pem file</li>
+          <li>Go to <strong>Settings → Security → Encryption & credentials → Install a certificate</strong></li>
+          <li>Select <strong>CA certificate</strong></li>
+          <li>Tap <strong>Install anyway</strong> (security warning is expected)</li>
+          <li>Browse to the downloaded file and install</li>
+        </ol>
+      </div>
+    </details>
+
+    <details style="margin-bottom:16px">
+      <summary style="cursor:pointer;font-weight:600;font-size:0.9rem;padding:8px 0">
+        Chromebook
+      </summary>
+      <div style="padding:8px 16px;font-size:0.85rem;color:var(--text-muted)">
+        <ol>
+          <li>Download the .pem file</li>
+          <li>Go to <strong>Settings → Security and Privacy → Manage certificates</strong></li>
+          <li>Click <strong>Authorities</strong> tab → Import</li>
+          <li>Select the .pem file</li>
+          <li>Check <strong>Trust this certificate for identifying websites</strong></li>
+        </ol>
+      </div>
+    </details>
+
+    <details>
+      <summary style="cursor:pointer;font-weight:600;font-size:0.9rem;padding:8px 0">
+        Linux
+      </summary>
+      <div style="padding:8px 16px;font-size:0.85rem;color:var(--text-muted)">
+        <pre style="background:var(--bg-primary);padding:8px;border-radius:4px;overflow-x:auto">sudo cp brainrotfilter-ca.pem /usr/local/share/ca-certificates/brainrotfilter-ca.crt
+sudo update-ca-certificates</pre>
+        <p style="margin-top:6px">Then restart your browser.</p>
+      </div>
+    </details>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadFingerprint() {
+  try {
+    const resp = await fetch('/api/wizard/ca-export');
+    if (resp.ok) {
+      document.getElementById('ca-fingerprint').textContent = 'Certificate available for download';
+    } else {
+      document.getElementById('ca-fingerprint').textContent = 'CA certificate not yet generated — run the setup wizard first';
+    }
+  } catch (e) {
+    document.getElementById('ca-fingerprint').textContent = 'Could not check certificate status';
+  }
+}
+loadFingerprint();
+</script>
+{% endblock %}
