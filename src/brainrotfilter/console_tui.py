@@ -8,6 +8,7 @@ system management without requiring SSH.
 Pure Python 3.9+, no external dependencies beyond stdlib.
 """
 
+import getpass
 import os
 import signal
 import subprocess
@@ -636,12 +637,47 @@ def action_set_management_ip() -> None:
     pause()
 
 
+def _set_user_password(user: str, password: str) -> Tuple[bool, str]:
+    """Set `user`'s password by piping `user:password` to chpasswd."""
+    proc = subprocess.run(
+        _sudo(["chpasswd"]),
+        input=f"{user}:{password}\n",
+        capture_output=True, text=True, timeout=15,
+    )
+    return proc.returncode == 0, proc.stderr.strip()
+
+
+def _prompt_password(prompt: str = "  New password: ") -> Optional[str]:
+    """Prompt twice for a password; return None on mismatch or empty."""
+    try:
+        first = getpass.getpass(prompt)
+        second = getpass.getpass("  Confirm: ")
+    except (EOFError, KeyboardInterrupt):
+        return None
+    if not first:
+        print(f"  {YELLOW}Cancelled (empty password).{RESET}")
+        return None
+    if first != second:
+        print(f"  {RED}Passwords do not match.{RESET}")
+        return None
+    return first
+
+
 def action_reset_admin_password() -> None:
-    """3) Reset Admin Password"""
+    """3) Reset Admin Password (root — used for SSH login)"""
     clear_screen()
-    print(f"\n{BOLD}  === Reset Admin Password ==={RESET}\n")
-    print(f"  {YELLOW}Coming soon.{RESET}")
-    print(f"  This feature will allow resetting the web UI admin password.")
+    print(f"\n{BOLD}  === Reset Root Password ==={RESET}\n")
+    print("  This sets the root account's password for SSH login.")
+    print("  (The web UI does not currently use a password.)\n")
+    pw = _prompt_password()
+    if pw is None:
+        pause()
+        return
+    ok, err = _set_user_password("root", pw)
+    if ok:
+        print(f"  {GREEN}Root password set.{RESET}")
+    else:
+        print(f"  {RED}Failed: {err}{RESET}")
     pause()
 
 
@@ -795,6 +831,18 @@ def action_toggle_ssh() -> None:
                 print(f"  {GREEN}SSH enabled.{RESET}")
                 fp = get_ssh_fingerprints()
                 print(f"  Host fingerprint: {fp}")
+                # Root has no password by default; offer to set one so
+                # the operator can actually log in without dropping to
+                # a shell to run `passwd root` manually.
+                print()
+                if confirm("Set a root password for SSH login now?"):
+                    pw = _prompt_password()
+                    if pw is not None:
+                        ok, err = _set_user_password("root", pw)
+                        if ok:
+                            print(f"  {GREEN}Root password set. SSH in as: root@{get_management_ip().split('/')[0]}{RESET}")
+                        else:
+                            print(f"  {RED}Failed to set password: {err}{RESET}")
             else:
                 print(f"  {RED}Failed: {r.stderr.strip()}{RESET}")
 

@@ -57,11 +57,15 @@ fs.protected_regular = 2
 fs.suid_dumpable = 0
 EOF
 
-# SSH config - secure defaults (sshd disabled by default but ready if enabled)
+# SSH config - appliance defaults. SSH is masked at build time and only
+# unmasked when the operator enables it from the TUI. The appliance is
+# physical-console-primary so credential-based login is the expected
+# access path (pubkey-only would require pre-loading a key, which
+# nobody can do before they have console access anyway).
 cat > /etc/ssh/sshd_config.d/99-brainrotfilter.conf <<'EOF'
-# BrainrotFilter appliance SSH hardening
-PermitRootLogin no
-PasswordAuthentication no
+# BrainrotFilter appliance SSH defaults
+PermitRootLogin yes
+PasswordAuthentication yes
 PubkeyAuthentication yes
 X11Forwarding no
 AllowAgentForwarding no
