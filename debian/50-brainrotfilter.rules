@@ -1,14 +1,27 @@
 // /etc/polkit-1/rules.d/50-brainrotfilter.rules
-// Allows the brainrotfilter system user to start the privileged
-// brainrotfilter-squid-apply.service without a password prompt.
-// This is required because the main service runs with NoNewPrivileges=true
-// which prevents sudo, so systemctl is used instead.
+// Allows the `brainrotfilter` system user to manage the appliance's own
+// systemd units without a password prompt. The main service runs with
+// NoNewPrivileges=true which blocks sudo, so systemctl-over-polkit is the
+// only path. Scoped tight: only our units, only start/stop/restart.
 
 polkit.addRule(function(action, subject) {
-    if (action.id == "org.freedesktop.systemd1.manage-units" &&
-        action.lookup("unit") == "brainrotfilter-squid-apply.service" &&
-        (action.lookup("verb") == "start") &&
-        subject.user == "brainrotfilter") {
+    if (action.id != "org.freedesktop.systemd1.manage-units") return;
+    if (subject.user != "brainrotfilter") return;
+
+    var unit = action.lookup("unit") || "";
+    var verb = action.lookup("verb") || "";
+
+    var allowedUnits = {
+        "brainrotfilter-squid-apply.service": true,
+        "brainrotfilter-icap.service": true,
+        "brainrotfilter-watchdog.service": true,
+        "squid.service": true,
+    };
+    var allowedVerbs = {
+        "start": true, "stop": true, "restart": true, "reload": true,
+    };
+
+    if (allowedUnits[unit] && allowedVerbs[verb]) {
         return polkit.Result.YES;
     }
 });

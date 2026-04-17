@@ -2,6 +2,11 @@
 Description=BrainrotFilter supervisor / auto-restarter
 After=network.target brainrotfilter.service squid.service
 Wants=brainrotfilter.service squid.service
+# No-op pre-wizard: Squid isn't configured yet so the watchdog would
+# endlessly try to restart a misconfigured unit (seen in VM tests as
+# "deactivating" flapping). Starts automatically after the wizard
+# writes this flag.
+ConditionPathExists=/etc/brainrotfilter/.wizard_complete
 
 [Service]
 Type=simple

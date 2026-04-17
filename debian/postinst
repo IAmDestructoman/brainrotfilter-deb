@@ -87,7 +87,11 @@ case "$1" in
         # Squid helper needs to read /etc/brainrotfilter
         chmod 755 /etc/brainrotfilter || true
 
-        # Enable and start the service
+        # Enable units. The filtering services (icap, watchdog) are gated
+        # by a ConditionPathExists on /etc/brainrotfilter/.wizard_complete,
+        # so they no-op on boot until the wizard finishes and then start
+        # explicitly. Pre-wizard we only run the admin API (brainrotfilter)
+        # so the operator can reach the setup wizard.
         systemctl daemon-reload
         systemctl enable brainrotfilter-squid-apply.service || true
         systemctl enable brainrotfilter.service || true
@@ -96,8 +100,9 @@ case "$1" in
         systemctl enable brainrotfilter-console.service || true
         systemctl enable brainrotfilter-firstboot.service || true
         systemctl start brainrotfilter.service || true
-        systemctl start brainrotfilter-icap.service || true
-        systemctl start brainrotfilter-watchdog.service || true
+        # icap/watchdog intentionally not started here — their unit-level
+        # ConditionPathExists would skip the start anyway; the wizard's
+        # finalize step starts them after writing the flag.
 
         # SSH disabled by default on appliance — TUI option toggles it
         systemctl disable ssh.service 2>/dev/null || true

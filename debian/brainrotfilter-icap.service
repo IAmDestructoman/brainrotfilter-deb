@@ -2,6 +2,9 @@
 Description=BrainrotFilter ICAP inspection service
 After=network.target brainrotfilter.service
 Wants=brainrotfilter.service
+# No-op until the wizard has run: pre-setup there's no Squid to talk to
+# and no iptables interception, so the ICAP server just wastes a port.
+ConditionPathExists=/etc/brainrotfilter/.wizard_complete
 
 [Service]
 Type=simple

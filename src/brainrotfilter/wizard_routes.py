@@ -331,6 +331,24 @@ async def _stream_apply_progress(
         except Exception:
             pass
 
+        # -- Start filtering services --------------------------------------
+        # icap + watchdog have ConditionPathExists on the flag we just
+        # wrote, so they were no-ops on boot. Start them now via systemctl
+        # (polkit rule 50-brainrotfilter.rules allows the brainrotfilter
+        # user to manage these specific units — sudo is blocked by
+        # NoNewPrivileges=true on the main service).
+        try:
+            import subprocess as _sp
+            for unit in ("brainrotfilter-icap.service",
+                         "brainrotfilter-watchdog.service"):
+                _sp.run(
+                    ["systemctl", "start", unit],
+                    timeout=10, check=False, capture_output=True,
+                )
+            yield sse("services", "done", "Filtering services started")
+        except Exception as exc:
+            yield sse("services", "done", f"Services will start at next boot ({exc})")
+
         # -- Factory snapshot (BTRFS appliances only) ----------------------
         # If the root filesystem is BTRFS and snapper is available, take a
         # "factory -- post-wizard" snapshot that the user can roll back to
