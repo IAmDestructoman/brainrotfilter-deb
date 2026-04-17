@@ -34,8 +34,28 @@ WEB_PORT = 8199
 # ---------------------------------------------------------------------------
 
 
-def _run(cmd: List[str], *, timeout: int = 15, capture: bool = True) -> subprocess.CompletedProcess:
-    """Run a command, swallowing errors so the TUI never crashes."""
+def _sudo(cmd: List[str]) -> List[str]:
+    """Prefix cmd with `sudo -n` when not running as root.
+
+    The TUI runs as the unprivileged `appliance` user via tty1 autologin,
+    but many management actions (netplan write + apply, systemctl
+    restart/reboot, snapper rollback, SSH toggle) need root. A sudoers
+    drop-in (installed by the appliance harden hook) grants
+    `appliance ALL=(ALL) NOPASSWD: ALL` so `sudo -n` works without a prompt.
+    """
+    if os.geteuid() == 0:
+        return cmd
+    return ["sudo", "-n", *cmd]
+
+
+def _run(cmd: List[str], *, timeout: int = 15, capture: bool = True, sudo: bool = False) -> subprocess.CompletedProcess:
+    """Run a command, swallowing errors so the TUI never crashes.
+
+    Set sudo=True for commands that require root; the helper prepends
+    `sudo -n` when the TUI isn't already root.
+    """
+    if sudo:
+        cmd = _sudo(cmd)
     try:
         return subprocess.run(
             cmd,
@@ -49,6 +69,14 @@ def _run(cmd: List[str], *, timeout: int = 15, capture: bool = True) -> subproce
         return subprocess.CompletedProcess(cmd, 124, stdout="", stderr="command timed out")
     except Exception as exc:
         return subprocess.CompletedProcess(cmd, 1, stdout="", stderr=str(exc))
+
+
+def _format_web_url(mgmt_ip: str) -> str:
+    """Format the Web UI URL; returns a placeholder when IP is unset."""
+    host = mgmt_ip.split("/")[0].strip() if mgmt_ip else ""
+    if not host or host == "N/A":
+        return "(set Management IP first)"
+    return f"http://{host}:{WEB_PORT}"
 
 
 def _run_interactive(cmd: List[str], *, timeout: int = 300) -> int:
@@ -216,7 +244,7 @@ def print_header() -> None:
     else:
         print(f"  Bridge {BRIDGE_IFACE}: {_state_color(br_state.lower())}  (no members detected)")
     print(f"  Management IP: {BOLD}{mgmt_ip}{RESET}")
-    print(f"  Web UI:        http://{mgmt_ip.split('/')[0]}:{WEB_PORT}")
+    print(f"  Web UI:        {_format_web_url(mgmt_ip)}")
     print(f"  Uptime:        {uptime}")
     print()
 
@@ -272,11 +300,11 @@ def action_system_status() -> None:
 def action_assign_interfaces() -> None:
     """1) Assign Interfaces"""
     clear_screen()
-    mgmt_ip = get_management_ip().split("/")[0]
+    mgmt_ip = get_management_ip()
     print(f"\n{BOLD}  === Assign Interfaces ==={RESET}\n")
     print(f"  Interface assignment is managed through the web UI.")
     print(f"  Open a browser and navigate to:\n")
-    print(f"    {BOLD}http://{mgmt_ip}:{WEB_PORT}{RESET}\n")
+    print(f"    {BOLD}{_format_web_url(mgmt_ip)}{RESET}\n")
     print(f"  The setup wizard will guide you through WAN/LAN NIC selection")
     print(f"  and bridge configuration.")
     pause()
@@ -343,9 +371,9 @@ def action_set_management_ip() -> None:
         return
 
     netplan_path = "/etc/netplan/90-brainrotfilter-mgmt.yaml"
-    # Write via tee to handle permissions
+    # Write via `sudo -n tee` — appliance user can't write /etc/netplan/ directly.
     proc = subprocess.run(
-        ["tee", netplan_path],
+        _sudo(["tee", netplan_path]),
         input=netplan_yaml,
         capture_output=True,
         text=True,
@@ -355,9 +383,13 @@ def action_set_management_ip() -> None:
         pause()
         return
 
+    # Netplan files must be mode 600 or looser only for root-readable reasons;
+    # set 600 explicitly to match Ubuntu 24.04's tightened permissions.
+    _run(["chmod", "600", netplan_path], sudo=True)
+
     # Apply
     print("  Applying netplan...")
-    r = _run(["netplan", "apply"], timeout=30)
+    r = _run(["netplan", "apply"], timeout=30, sudo=True)
     if r.returncode == 0:
         print(f"  {GREEN}Network configuration applied.{RESET}")
     else:
@@ -393,14 +425,14 @@ def action_factory_reset() -> None:
         return
 
     print("\n  Performing factory reset...")
-    r = _run(["snapper", "rollback", "1"], timeout=120)
+    r = _run(["snapper", "rollback", "1"], timeout=120, sudo=True)
     if r.returncode != 0:
         print(f"  {RED}snapper rollback failed: {r.stderr.strip()}{RESET}")
         pause()
         return
 
     print(f"  {GREEN}Rollback complete. Rebooting...{RESET}")
-    _run(["systemctl", "reboot"])
+    _run(["systemctl", "reboot"], sudo=True)
 
 
 def action_restart_services() -> None:
@@ -442,7 +474,7 @@ def action_restart_services() -> None:
 
     for svc in targets:
         print(f"  Restarting {svc}...")
-        r = _run(["systemctl", "restart", svc], timeout=30)
+        r = _run(["systemctl", "restart", svc], timeout=30, sudo=True)
         if r.returncode == 0:
             print(f"    {GREEN}OK{RESET}")
         else:
@@ -463,14 +495,14 @@ def action_update() -> None:
         return
 
     print("\n  Updating package lists...")
-    rc = _run_interactive(["apt", "update"], timeout=120)
+    rc = _run_interactive(_sudo(["apt", "update"]), timeout=120)
     if rc != 0:
         print(f"\n  {RED}apt update failed (exit {rc}).{RESET}")
         pause()
         return
 
     print("\n  Upgrading brainrotfilter...")
-    rc = _run_interactive(["apt", "upgrade", "brainrotfilter", "-y"], timeout=300)
+    rc = _run_interactive(_sudo(["apt", "upgrade", "brainrotfilter", "-y"]), timeout=300)
     if rc == 0:
         print(f"\n  {GREEN}Update complete.{RESET}")
     else:
@@ -491,14 +523,14 @@ def action_toggle_ssh() -> None:
         fp = get_ssh_fingerprints()
         print(f"  Host fingerprint: {fp}\n")
         if confirm("Disable SSH?"):
-            r = _run(["systemctl", "disable", "--now", "ssh"])
+            r = _run(["systemctl", "disable", "--now", "ssh"], sudo=True)
             if r.returncode == 0:
                 print(f"  {GREEN}SSH disabled.{RESET}")
             else:
                 print(f"  {RED}Failed: {r.stderr.strip()}{RESET}")
     else:
         if confirm("Enable SSH?"):
-            r = _run(["systemctl", "enable", "--now", "ssh"])
+            r = _run(["systemctl", "enable", "--now", "ssh"], sudo=True)
             if r.returncode == 0:
                 print(f"  {GREEN}SSH enabled.{RESET}")
                 fp = get_ssh_fingerprints()
@@ -533,11 +565,11 @@ def action_reboot_shutdown() -> None:
     if choice == "1":
         if confirm("Reboot now?"):
             print("  Rebooting...")
-            _run(["systemctl", "reboot"])
+            _run(["systemctl", "reboot"], sudo=True)
     elif choice == "2":
         if confirm("Shut down now?"):
             print("  Shutting down...")
-            _run(["systemctl", "poweroff"])
+            _run(["systemctl", "poweroff"], sudo=True)
     else:
         return
 

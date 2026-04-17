@@ -90,4 +90,21 @@ if ! getent passwd appliance >/dev/null; then
     passwd -d appliance
 fi
 
+# Sudoers drop-in for the appliance user. The TUI needs to run privileged
+# commands (netplan apply, systemctl restart/reboot, snapper rollback,
+# apt upgrade, SSH toggle) without prompting for a password. The appliance
+# user IS the physical console operator — anyone with physical access can
+# already reboot the box and factory-reset via snapper, so unrestricted
+# NOPASSWD here is the correct threat model (matches pfSense / OPNsense /
+# Untangle appliances).
+install -d -m 755 /etc/sudoers.d
+cat > /etc/sudoers.d/50-brainrotfilter-appliance <<'EOF'
+# Allow the appliance console user to run any command as root without a
+# password. Scoped to physical-console-only: SSH logins (when enabled via
+# the TUI) land as a different user and still require the normal sudo rules.
+appliance ALL=(ALL) NOPASSWD: ALL
+EOF
+chmod 0440 /etc/sudoers.d/50-brainrotfilter-appliance
+visudo -cf /etc/sudoers.d/50-brainrotfilter-appliance >/dev/null
+
 echo "[brainrot-iso] Hardening applied."
