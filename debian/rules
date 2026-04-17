@@ -55,6 +55,8 @@ override_dh_auto_install:
 		$(CURDIR)/debian/brainrotfilter/usr/lib/brainrotfilter/scripts/
 	install -m 755 $(CURDIR)/scripts/apply_squid_config.sh \
 		$(CURDIR)/debian/brainrotfilter/usr/lib/brainrotfilter/scripts/
+	install -m 755 $(CURDIR)/scripts/install_to_disk.sh \
+		$(CURDIR)/debian/brainrotfilter/usr/lib/brainrotfilter/scripts/
 
 	# Install console TUI (appliance menu)
 	install -d $(CURDIR)/debian/brainrotfilter/usr/lib/brainrotfilter/tui

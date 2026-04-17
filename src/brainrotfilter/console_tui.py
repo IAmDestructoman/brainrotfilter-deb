@@ -785,6 +785,25 @@ def action_toggle_ssh() -> None:
     pause()
 
 
+def action_install_to_disk() -> None:
+    """I) Install to Disk"""
+    clear_screen()
+    print(f"\n{BOLD}  === Install to Disk ==={RESET}\n")
+    print(f"  {YELLOW}Copies the running live appliance onto an internal disk,")
+    print(f"  installs GRUB (BIOS + UEFI), and preserves your current wizard")
+    print(f"  progress + bridge configuration.{RESET}\n")
+    print(f"  {RED}The selected target disk will be wiped.{RESET}\n")
+    if not confirm("Continue to disk selection?"):
+        return
+    rc = _run_interactive(
+        _sudo(["/usr/lib/brainrotfilter/scripts/install_to_disk.sh"]),
+        timeout=3600,
+    )
+    if rc != 0:
+        print(f"\n  {RED}Install did not complete cleanly (exit {rc}).{RESET}")
+    pause()
+
+
 def action_shell() -> None:
     """8) Shell"""
     clear_screen()
@@ -831,6 +850,7 @@ MENU_ITEMS = [
     ("5", "Restart Services", action_restart_services),
     ("6", "Update BrainrotFilter", action_update),
     ("7", "Enable/Disable SSH", action_toggle_ssh),
+    ("I", "Install to Disk", action_install_to_disk),
     ("8", "Shell", action_shell),
     ("9", "Reboot / Shutdown", action_reboot_shutdown),
 ]
@@ -874,10 +894,10 @@ def main() -> None:
             except EOFError:
                 continue
 
-            # Dispatch
+            # Dispatch (case-insensitive for letter keys like "I")
             dispatched = False
             for key, _, action in MENU_ITEMS:
-                if choice == key:
+                if choice == key or choice.upper() == key.upper():
                     action()
                     dispatched = True
                     break
