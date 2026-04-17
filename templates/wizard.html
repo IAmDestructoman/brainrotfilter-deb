@@ -1300,6 +1300,7 @@ input[type="range"]::-webkit-slider-thumb {
   var apiKeyVerified = false;
   var networkMode = 'bridge';  // 'bridge' | 'single'
   var lastInterfaceData = [];
+  var lastBridgeInfo = {exists: false, members: []};
 
   // -- Step indicator --
 
@@ -1344,8 +1345,33 @@ input[type="range"]::-webkit-slider-thumb {
   window.goNext = function() {
     if (!validateStep(currentStep)) return;
     // When leaving the Network Setup step in bridge mode, write the
-    // netplan/sysctl/modules-load config on the server before advancing.
+    // netplan/sysctl/modules-load config on the server before advancing —
+    // but skip the write if br0 already exists with the chosen members
+    // (typical when operator created the bridge via the TUI first).
     if (currentStep === 2 && networkMode === 'bridge') {
+      var wan = document.getElementById('wanNic').value;
+      var lan = document.getElementById('lanNic').value;
+
+      var existing = lastBridgeInfo || {exists: false, members: []};
+      var membersMatch = existing.exists &&
+        existing.members.indexOf(wan) !== -1 &&
+        existing.members.indexOf(lan) !== -1;
+
+      if (membersMatch) {
+        showResult('ifaceResult',
+          'Adopting existing bridge br0 (' + existing.members.join(', ') + ') — no changes to write.',
+          'success');
+        var singleSel0 = document.getElementById('networkInterface');
+        if (singleSel0) {
+          var opt0 = document.createElement('option');
+          opt0.value = 'br0'; opt0.textContent = 'br0 (transparent bridge)';
+          opt0.selected = true;
+          singleSel0.appendChild(opt0);
+        }
+        goToStep(currentStep + 1);
+        return;
+      }
+
       var btn = document.getElementById('btnNext');
       btn.disabled = true;
       btn.textContent = 'Configuring bridge...';
@@ -1535,6 +1561,7 @@ input[type="range"]::-webkit-slider-thumb {
     .then(function(data) {
       var ifaces = data.interfaces || [];
       lastInterfaceData = ifaces;
+      lastBridgeInfo = data.bridge || {exists: false, members: []};
 
       // Physical NICs only for the bridge selectors.
       var physical = function(it) { return !it.is_bridge && !it.is_virtual; };
@@ -1543,21 +1570,27 @@ input[type="range"]::-webkit-slider-thumb {
       var lanSel = document.getElementById('lanNic');
       var singleSel = document.getElementById('networkInterface');
 
-      // Heuristic: the NIC facing the upstream router gets a DHCP lease
-      // on first boot (default netplan DHCPs every ethernet). The other
-      // physical NIC has carrier up but no IP. If exactly one of each,
-      // preselect WAN/LAN and tell the user so they can just hit Next.
-      var physicalIfaces = ifaces.filter(physical);
-      var hasRealAddr = function(i) {
-        return i.addr && !String(i.addr).startsWith('169.254') && String(i.addr) !== '0.0.0.0';
-      };
-      var withIp = physicalIfaces.filter(hasRealAddr);
-      var noIp = physicalIfaces.filter(function(i) { return !hasRealAddr(i); });
-      var detected = (physicalIfaces.length >= 2 && withIp.length === 1 && noIp.length >= 1)
-        ? {wan: withIp[0], lan: noIp[0]} : null;
-
-      var wanDefault = detected ? detected.wan.name : (ifaces[0] && ifaces[0].name);
-      var lanDefault = detected ? detected.lan.name : (ifaces[1] && ifaces[1].name);
+      // If the operator already created br0 from the TUI, preselect its
+      // existing members and tell the wizard to skip the netplan write.
+      var wanDefault, lanDefault, preselectedFromExisting = false;
+      if (lastBridgeInfo.exists && lastBridgeInfo.members && lastBridgeInfo.members.length >= 2) {
+        wanDefault = lastBridgeInfo.members[0];
+        lanDefault = lastBridgeInfo.members[1];
+        preselectedFromExisting = true;
+      } else {
+        // Heuristic: the NIC facing the upstream router has a DHCP lease,
+        // the other physical NIC is carrier-up without an IP.
+        var physicalIfaces = ifaces.filter(physical);
+        var hasRealAddr = function(i) {
+          return i.addr && !String(i.addr).startsWith('169.254') && String(i.addr) !== '0.0.0.0';
+        };
+        var withIp = physicalIfaces.filter(hasRealAddr);
+        var noIp = physicalIfaces.filter(function(i) { return !hasRealAddr(i); });
+        var detected = (physicalIfaces.length >= 2 && withIp.length === 1 && noIp.length >= 1)
+          ? {wan: withIp[0], lan: noIp[0]} : null;
+        wanDefault = detected ? detected.wan.name : (ifaces[0] && ifaces[0].name);
+        lanDefault = detected ? detected.lan.name : (ifaces[1] && ifaces[1].name);
+      }
 
       if (wanSel) _populateSelect(wanSel, ifaces, physical, wanDefault);
       if (lanSel) _populateSelect(lanSel, ifaces, physical, lanDefault);
@@ -1566,9 +1599,10 @@ input[type="range"]::-webkit-slider-thumb {
 
       if (ifaces.length === 0) {
         showResult('ifaceResult', 'No interfaces detected', 'error');
-      } else if (detected) {
+      } else if (preselectedFromExisting) {
         showResult('ifaceResult',
-          'Auto-detected: WAN=' + detected.wan.name + ' (lease ' + detected.wan.addr + '), LAN=' + detected.lan.name + ' (no IP). Click Next to use these.',
+          'Bridge br0 already configured via TUI (members: ' + lastBridgeInfo.members.join(', ') +
+          '). Click Next to adopt it, or change the selectors above to reconfigure.',
           'success');
       } else {
         showResult('ifaceResult', 'Found ' + ifaces.length + ' interface(s) — select WAN and LAN manually', 'success');

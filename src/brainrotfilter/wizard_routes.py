@@ -497,7 +497,26 @@ async def list_interfaces() -> Dict[str, Any]:
     except Exception:
         # fcntl isn't available on every platform; ignore silently.
         pass
-    return {"interfaces": ifaces}
+
+    # Detect an existing br0 created out-of-band (e.g. via the TUI
+    # "Assign Interfaces" action). If present, the wizard can skip its
+    # own bridge-creation step and just adopt the existing setup.
+    bridge: Dict[str, Any] = {"exists": False, "name": "br0", "members": []}
+    try:
+        import os
+        brif_dir = "/sys/class/net/br0/brif"
+        if os.path.isdir(brif_dir):
+            bridge["exists"] = True
+            bridge["members"] = sorted(os.listdir(brif_dir))
+            try:
+                with open("/sys/class/net/br0/operstate") as f:
+                    bridge["state"] = f.read().strip()
+            except Exception:
+                bridge["state"] = "unknown"
+    except Exception:
+        pass
+
+    return {"interfaces": ifaces, "bridge": bridge}
 
 
 @router.post("/configure-bridge")
