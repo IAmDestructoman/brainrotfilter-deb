@@ -20,10 +20,10 @@ need_root() {
 }
 
 check_deps() {
-    for bin in lb xorriso wget gpg; do
+    for bin in lb xorriso wget gpg grub-mkrescue; do
         if ! command -v "$bin" >/dev/null 2>&1; then
             echo "Missing dependency: $bin" >&2
-            echo "Install with: sudo apt install live-build xorriso wget gnupg" >&2
+            echo "Install with: sudo apt install live-build xorriso wget gnupg grub-pc-bin grub-efi-amd64-bin mtools" >&2
             exit 1
         fi
     done
@@ -148,19 +148,83 @@ build_iso() {
     cd ..
 }
 
-publish_iso() {
-    local iso_src
-    iso_src=$(ls -1 "$WORK_DIR"/live-image-amd64.hybrid.iso 2>/dev/null | head -1)
-    if [ -z "$iso_src" ]; then
-        echo "ERROR: No ISO produced. See $WORK_DIR/build.log" >&2
+remaster_iso() {
+    # live-build's final isohybrid step fails on noble (syslinux-utils not
+    # pulled in when we use grub-pc) and when it falls back the produced ISO
+    # has no El Torito boot record at all -> Rufus rejects as unbootable.
+    # Repack the ISO's contents with grub-mkrescue, which writes a proper
+    # hybrid ISO (BIOS via grub2-mbr + UEFI via El Torito EFI image).
+    local src
+    for candidate in binary.hybrid.iso chroot/binary.hybrid.iso live-image-amd64.hybrid.iso; do
+        if [ -f "$WORK_DIR/$candidate" ]; then
+            src="$WORK_DIR/$candidate"
+            break
+        fi
+    done
+    if [ -z "$src" ]; then
+        echo "ERROR: No source ISO found in $WORK_DIR/" >&2
         exit 1
     fi
+
+    echo "[build_iso] Remastering $src with grub-mkrescue for BIOS+UEFI hybrid boot..."
+    local stage=/tmp/brainrot-iso-stage
+    local mnt=/tmp/brainrot-iso-mount
+    rm -rf "$stage"
+    mkdir -p "$stage" "$mnt"
+    mount -o loop,ro "$src" "$mnt"
+    cp -a "$mnt/." "$stage/"
+    umount "$mnt"
+
+    # Find kernel/initrd to write an appropriate grub.cfg
+    local vmlinuz initrd
+    vmlinuz=$(cd "$stage/casper" 2>/dev/null && ls vmlinuz-* 2>/dev/null | head -1)
+    initrd=$(cd "$stage/casper" 2>/dev/null && ls initrd.img-* 2>/dev/null | head -1)
+    if [ -z "$vmlinuz" ] || [ -z "$initrd" ]; then
+        echo "ERROR: No casper kernel/initrd in staged ISO contents" >&2
+        exit 1
+    fi
+
+    mkdir -p "$stage/boot/grub"
+    cat > "$stage/boot/grub/grub.cfg" <<EOF
+set default=0
+set timeout=5
+
+menuentry "BrainrotFilter Appliance (Live)" {
+    linux /casper/$vmlinuz boot=casper quiet splash ---
+    initrd /casper/$initrd
+}
+
+menuentry "BrainrotFilter Appliance (Safe mode)" {
+    linux /casper/$vmlinuz boot=casper nomodeset ---
+    initrd /casper/$initrd
+}
+
+menuentry "Memory test" {
+    linux16 /casper/memtest
+}
+EOF
+
+    grub-mkrescue -o "$WORK_DIR/$ISO_NAME.remaster" "$stage" -- -volid BRAINROT_${VERSION} 2>&1 | tail -3
+    rm -rf "$stage"
+
+    if [ ! -s "$WORK_DIR/$ISO_NAME.remaster" ]; then
+        echo "ERROR: grub-mkrescue did not produce an ISO" >&2
+        exit 1
+    fi
+    mv "$WORK_DIR/$ISO_NAME.remaster" "$WORK_DIR/$ISO_NAME"
+}
+
+publish_iso() {
+    remaster_iso
+
+    local iso_src="$WORK_DIR/$ISO_NAME"
     cp -v "$iso_src" "./$ISO_NAME"
     echo
     echo "======================================"
     echo "  ISO built: $(pwd)/$ISO_NAME"
     echo "  Size:     $(du -h "./$ISO_NAME" | cut -f1)"
     echo "  SHA256:   $(sha256sum "./$ISO_NAME" | cut -d' ' -f1)"
+    echo "  Boot:     BIOS + UEFI hybrid (Rufus / balenaEtcher compatible)"
     echo "======================================"
 }
 
