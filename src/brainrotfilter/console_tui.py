@@ -356,30 +356,36 @@ def action_set_management_ip() -> None:
         pause()
         return
 
-    # Determine interface
+    # Determine whether br0 already exists; if so, rewrite its
+    # systemd-networkd .network file in place rather than going through
+    # netplan. Avoids:
+    #   - netplan+systemd-networkd file priority races
+    #   - losing the bridge member list (wildcard from firstboot config)
+    #   - the YAML indentation bug from earlier builds
     iface = BRIDGE_IFACE
-    r = _run(["ip", "link", "show", "dev", BRIDGE_IFACE])
-    if r.returncode != 0:
-        # No bridge — use default route interface
+    is_bridge = False
+    r = _run(["ip", "-d", "link", "show", "dev", BRIDGE_IFACE])
+    if r.returncode == 0:
+        is_bridge = "bridge" in r.stdout.lower()
+    else:
         r2 = _run(["ip", "-4", "route", "show", "default"])
         if r2.returncode == 0 and "dev" in r2.stdout:
             parts = r2.stdout.strip().split()
             iface = parts[parts.index("dev") + 1]
 
-    # Build netplan YAML
-    addresses_block = f"      addresses:\n        - {ip_cidr}"
-    gw_block = f"\n      routes:\n        - to: default\n          via: {gateway}" if gateway else ""
-    dns_block = f"\n      nameservers:\n        addresses:\n          - {dns}"
-
-    netplan_yaml = textwrap.dedent(f"""\
-        # BrainrotFilter management network — written by console TUI
-        network:
-          version: 2
-          renderer: networkd
-          ethernets:
-            {iface}:
-        {addresses_block}{gw_block}{dns_block}
-    """)
+    # Build a systemd-networkd .network file (INI format).
+    lines = [
+        "# BrainrotFilter management network — written by console TUI",
+        "[Match]",
+        f"Name={iface}",
+        "",
+        "[Network]",
+        f"Address={ip_cidr}",
+        f"DNS={dns}",
+    ]
+    if gateway:
+        lines.append(f"Gateway={gateway}")
+    netplan_yaml = "\n".join(lines) + "\n"
 
     print(f"\n  Will write the following netplan config for {iface}:\n")
     for line in netplan_yaml.splitlines():
@@ -391,30 +397,39 @@ def action_set_management_ip() -> None:
         pause()
         return
 
-    netplan_path = "/etc/netplan/90-brainrotfilter-mgmt.yaml"
-    # Write via `sudo -n tee` — appliance user can't write /etc/netplan/ directly.
+    # Write directly to the systemd-networkd file that owns this iface.
+    # For br0 that's the one installed by the ISO harden hook; rewriting
+    # it in place keeps the bridge membership file (20-brainrot-bridge-
+    # members.network) untouched, so physical NICs remain enslaved.
+    if is_bridge and iface == BRIDGE_IFACE:
+        net_path = "/etc/systemd/network/30-brainrot-br0.network"
+    else:
+        net_path = f"/etc/systemd/network/80-brainrot-mgmt-{iface}.network"
+
     proc = subprocess.run(
-        _sudo(["tee", netplan_path]),
+        _sudo(["tee", net_path]),
         input=netplan_yaml,
         capture_output=True,
         text=True,
     )
     if proc.returncode != 0:
-        print(f"  {RED}Failed to write netplan config: {proc.stderr.strip()}{RESET}")
+        print(f"  {RED}Failed to write network config: {proc.stderr.strip()}{RESET}")
         pause()
         return
 
-    # Netplan files must be mode 600 or looser only for root-readable reasons;
-    # set 600 explicitly to match Ubuntu 24.04's tightened permissions.
-    _run(["chmod", "600", netplan_path], sudo=True)
+    # Drop stale netplan mgmt file from earlier 1.1.0 builds that wrote
+    # to /etc/netplan/90-brainrotfilter-mgmt.yaml — now dead code path.
+    _run(["rm", "-f", "/etc/netplan/90-brainrotfilter-mgmt.yaml"], sudo=True)
 
-    # Apply
-    print("  Applying netplan...")
-    r = _run(["netplan", "apply"], timeout=30, sudo=True)
+    # Apply: reload networkd so it picks up the new config, then
+    # reconfigure the target interface (faster than a full restart).
+    print("  Applying...")
+    r = _run(["networkctl", "reload"], timeout=15, sudo=True)
     if r.returncode == 0:
+        _run(["networkctl", "reconfigure", iface], timeout=15, sudo=True)
         print(f"  {GREEN}Network configuration applied.{RESET}")
     else:
-        print(f"  {RED}netplan apply failed: {r.stderr.strip()}{RESET}")
+        print(f"  {RED}networkctl reload failed: {r.stderr.strip()}{RESET}")
 
     pause()
 
