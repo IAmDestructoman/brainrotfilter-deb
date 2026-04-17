@@ -16,11 +16,19 @@ Depends: ${misc:Depends},
          polkitd | policykit-1,
          openssl,
          iptables,
+         iptables-persistent,
          conntrack,
          curl,
-         ffmpeg
-Recommends: python3-pip
-Suggests: vosk-model-en-us-small
+         ffmpeg,
+         bridge-utils,
+         ebtables
+Recommends: python3-pip,
+            python3-httpx,
+            btrfs-progs,
+            snapper,
+            dialog
+Suggests: vosk-model-en-us-small,
+          tesseract-ocr
 Description: Network-level YouTube brainrot video filter for Linux
  BrainrotFilter is a transparent network proxy that analyzes YouTube
  videos using keyword matching, scene detection, audio analysis, and

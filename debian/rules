@@ -49,10 +49,17 @@ override_dh_auto_install:
 		$(CURDIR)/debian/brainrotfilter/usr/lib/brainrotfilter/scripts/
 	install -m 755 $(CURDIR)/scripts/squid_acl_helper.sh \
 		$(CURDIR)/debian/brainrotfilter/usr/lib/brainrotfilter/scripts/
+	install -m 755 $(CURDIR)/scripts/squid_cdn_block_helper.sh \
+		$(CURDIR)/debian/brainrotfilter/usr/lib/brainrotfilter/scripts/
 	install -m 755 $(CURDIR)/scripts/state_killer.sh \
 		$(CURDIR)/debian/brainrotfilter/usr/lib/brainrotfilter/scripts/
 	install -m 755 $(CURDIR)/scripts/apply_squid_config.sh \
 		$(CURDIR)/debian/brainrotfilter/usr/lib/brainrotfilter/scripts/
+
+	# Install console TUI (appliance menu)
+	install -d $(CURDIR)/debian/brainrotfilter/usr/lib/brainrotfilter/tui
+	-install -m 755 $(CURDIR)/src/brainrotfilter/console_tui.py \
+		$(CURDIR)/debian/brainrotfilter/usr/lib/brainrotfilter/tui/console_tui.py
 
 	# Install polkit rules for privileged squid config helper.
 	# .rules  = JS format for polkitd >= 0.106 (Ubuntu 23.04+, Debian bookworm+)
@@ -83,6 +90,10 @@ override_dh_installsystemd:
 	install -d $(CURDIR)/debian/brainrotfilter/lib/systemd/system/
 	install -m 644 $(CURDIR)/debian/brainrotfilter-squid-apply.service \
 		$(CURDIR)/debian/brainrotfilter/lib/systemd/system/brainrotfilter-squid-apply.service
+	install -m 644 $(CURDIR)/debian/brainrotfilter-icap.service \
+		$(CURDIR)/debian/brainrotfilter/lib/systemd/system/brainrotfilter-icap.service
+	install -m 644 $(CURDIR)/debian/brainrotfilter-watchdog.service \
+		$(CURDIR)/debian/brainrotfilter/lib/systemd/system/brainrotfilter-watchdog.service
 	dh_installsystemd
 
 override_dh_auto_test:
