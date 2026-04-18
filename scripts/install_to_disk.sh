@@ -290,39 +290,71 @@ fi
 # -- Rebuild initramfs now that casper's hooks are gone --
 chroot "$MNT" update-initramfs -u -k all 2>&1 | tail -3
 
-# -- Install GRUB for both firmware paths --
+# -- Install GRUB bulletproof.
 #
-# UEFI: use --removable so grub writes to /EFI/BOOT/BOOTX64.EFI (the
-# firmware fallback path) and --no-nvram so we DON'T touch the EFI
-# BootOrder variable. That way:
-#   * A booted live ISO / PXE / any other NVRAM entry keeps its
-#     normal priority — you can always boot the live ISO for rescue
-#     or reinstall without detaching the disk or deleting NVRAM
-#     entries.
-#   * When no removable media is present, firmware falls through to
-#     the default /EFI/BOOT/BOOTX64.EFI on disk and the installed
-#     system boots.
+# Past attempts with --removable / --no-nvram kept failing ("stuck at
+# grub screen" after reboot without ISO). Switch to the belt-and-
+# suspenders approach every well-behaved Linux appliance uses:
 #
-# BIOS: unchanged — i386-pc writes to the BIOS Boot Partition on the
-# disk, no NVRAM involved.
-echo "Installing GRUB..."
-chroot "$MNT" grub-install --target=x86_64-efi \
+#   1. Install GRUB to a NAMED EFI path (/EFI/BrainrotFilter/grubx64.efi)
+#      with NVRAM entry. This is what firmware will pick by name.
+#   2. Install GRUB to the FALLBACK path (/EFI/BOOT/BOOTX64.EFI) for
+#      firmwares that don't honor NVRAM entries (removable media,
+#      weird BIOSes, post-CMOS-reset).
+#   3. Install BIOS i386-pc to the BIOS Boot Partition.
+#   4. Embed a prefix+configfile stub in every EFI .cfg location so
+#      GRUB can always find its main config regardless of which path
+#      it was loaded from.
+#   5. Force root= in the kernel cmdline to be UUID-based so probing
+#      order doesn't matter.
+echo "Installing GRUB (UEFI named + fallback + BIOS)..."
+
+# Named UEFI install — writes /EFI/BrainrotFilter/{grubx64.efi, grub.cfg}
+# and creates an NVRAM entry.
+chroot "$MNT" grub-install \
+    --target=x86_64-efi \
     --efi-directory=/boot/efi \
-    --removable --no-nvram \
+    --bootloader-id=BrainrotFilter \
     --recheck --no-floppy 2>&1 | tail -3 || true
-chroot "$MNT" grub-install --target=i386-pc \
+
+# BIOS install — writes MBR + stage2 blocks to the BIOS Boot Partition.
+chroot "$MNT" grub-install \
+    --target=i386-pc \
     --recheck --no-floppy "$TARGET" 2>&1 | tail -3 || true
+
+# Generate /boot/grub/grub.cfg from /etc/default/grub and 10_linux etc.
 chroot "$MNT" update-grub 2>&1 | tail -3
 
-# -- Best-effort: delete any stale "BrainrotFilter" NVRAM entry left
-#    over from earlier builds that used --bootloader-id. Harmless on
-#    fresh hardware (efibootmgr prints "no match" and exits non-zero).
-if chroot "$MNT" command -v efibootmgr >/dev/null 2>&1; then
-    while read -r line; do
-        num=$(echo "$line" | awk '{print $1}' | sed 's/^Boot//;s/\*$//')
-        [ -n "$num" ] && chroot "$MNT" efibootmgr -b "$num" -B >/dev/null 2>&1 || true
-    done < <(chroot "$MNT" efibootmgr 2>/dev/null | grep -E '^Boot[0-9A-F]{4}\*?\s+BrainrotFilter')
+# Copy the named EFI binary to the fallback path too. This way the
+# disk is bootable by any firmware that walks the standard UEFI
+# fallback chain, including when all NVRAM variables are cleared.
+mkdir -p "$MNT/boot/efi/EFI/BOOT"
+if [ -f "$MNT/boot/efi/EFI/BrainrotFilter/grubx64.efi" ]; then
+    cp "$MNT/boot/efi/EFI/BrainrotFilter/grubx64.efi" \
+       "$MNT/boot/efi/EFI/BOOT/BOOTX64.EFI"
 fi
+# Copy shim as the fallback BOOTX64 when it exists — lets the disk
+# boot under Secure Boot too.
+if [ -f "$MNT/boot/efi/EFI/BrainrotFilter/shimx64.efi" ]; then
+    cp "$MNT/boot/efi/EFI/BrainrotFilter/shimx64.efi" \
+       "$MNT/boot/efi/EFI/BOOT/BOOTX64.EFI"
+    cp "$MNT/boot/efi/EFI/BrainrotFilter/grubx64.efi" \
+       "$MNT/boot/efi/EFI/BOOT/grubx64.efi"
+fi
+
+# Both the named dir and the fallback dir get a grub.cfg that loads
+# the real config from the root partition. `search --fs-uuid` pins it
+# to the actual root we just wrote so there's no ambiguity.
+for d in "$MNT/boot/efi/EFI/BrainrotFilter" "$MNT/boot/efi/EFI/BOOT"; do
+    mkdir -p "$d"
+    cat > "$d/grub.cfg" <<EOF
+# Stage-1 config — locate the real /boot/grub/grub.cfg on the root
+# partition (UUID $ROOT_UUID) and hand off.
+search --no-floppy --fs-uuid --set=root $ROOT_UUID
+set prefix=(\$root)/boot/grub
+configfile /boot/grub/grub.cfg
+EOF
+done
 
 # -- Make sure firmware's BootOrder keeps removable media (DVD / USB)
 #    ahead of the disk. On Hyper-V Gen2 specifically, the VM's GUI-level
@@ -348,7 +380,9 @@ if command -v efibootmgr >/dev/null 2>&1 && [ -d /sys/firmware/efi/efivars ]; th
     # bucket pulls the DVD, "disk" pulls the target.
     new_order=""
     for g in "$removable" "$disk" "$net"; do
-        [ -n "$g" ] && new_order="${new_order:+$new_order,}$g"
+        if [ -n "$g" ]; then
+            new_order="${new_order:+$new_order,}$g"
+        fi
     done
     if [ -n "$new_order" ]; then
         efibootmgr -o "$new_order" >/dev/null 2>&1 || true
