@@ -61,8 +61,10 @@ for mnt in /cdrom /run/live/medium /live/image; do
     if mountpoint -q "$mnt" 2>/dev/null; then
         src=$(findmnt -no SOURCE "$mnt" | head -1)
         if [ -n "$src" ]; then
-            pk=$(lsblk -no PKNAME "$src" 2>/dev/null | head -1)
-            [ -n "$pk" ] && BOOT_DEV="/dev/$pk"
+            pk=$(lsblk -no PKNAME "$src" 2>/dev/null | head -1 || true)
+            if [ -n "$pk" ]; then
+                BOOT_DEV="/dev/$pk"
+            fi
         fi
         break
     fi
@@ -72,7 +74,9 @@ echo
 echo "${BOLD}=== BrainrotFilter: Install to Disk ===${NC}"
 echo
 echo "Source: $SQUASHFS"
-[ -n "$BOOT_DEV" ] && echo "Boot media (will be skipped): $BOOT_DEV"
+if [ -n "$BOOT_DEV" ]; then
+    echo "Boot media (will be skipped): $BOOT_DEV"
+fi
 echo
 
 # -- List candidate disks (skip the boot media) --
@@ -98,17 +102,31 @@ fi
 
 # -- Pick target --
 read -rp "Pick target disk number (or 'q' to cancel): " PICK
-[ "$PICK" = "q" ] || [ -z "$PICK" ] && { echo "Cancelled."; exit 0; }
+if [ -z "$PICK" ] || [ "$PICK" = "q" ] || [ "$PICK" = "Q" ]; then
+    echo "Cancelled."; exit 0
+fi
 [[ "$PICK" =~ ^[0-9]+$ ]] || die "not a number"
-[ "$PICK" -ge 1 ] && [ "$PICK" -le ${#CANDIDATES[@]} ] || die "out of range"
+if [ "$PICK" -lt 1 ] || [ "$PICK" -gt "${#CANDIDATES[@]}" ]; then
+    die "out of range"
+fi
 TARGET="${CANDIDATES[$((PICK-1))]}"
-[ "$TARGET" != "$BOOT_DEV" ] || die "refusing to wipe the boot media"
+if [ -n "$BOOT_DEV" ] && [ "$TARGET" = "$BOOT_DEV" ]; then
+    die "refusing to wipe the boot media"
+fi
 
 # Also refuse to wipe the currently-running system root (can happen
 # when booted from the installed disk rather than the live ISO).
-RUNNING_ROOT=$(findmnt -no SOURCE / 2>/dev/null | head -1)
-RUNNING_DEV=$(lsblk -no PKNAME "$RUNNING_ROOT" 2>/dev/null | head -1)
-[ -n "$RUNNING_DEV" ] && RUNNING_DEV="/dev/$RUNNING_DEV"
+# On a live boot, findmnt returns "overlay" / "/cow" which isn't a
+# block device — resolve safely so `set -e` doesn't trip on the
+# empty-lsblk test.
+RUNNING_DEV=""
+RUNNING_ROOT=$(findmnt -no SOURCE / 2>/dev/null | head -1 || true)
+if [ -n "$RUNNING_ROOT" ] && [ -b "$RUNNING_ROOT" ]; then
+    pk=$(lsblk -no PKNAME "$RUNNING_ROOT" 2>/dev/null | head -1 || true)
+    if [ -n "$pk" ]; then
+        RUNNING_DEV="/dev/$pk"
+    fi
+fi
 if [ -n "$RUNNING_DEV" ] && [ "$TARGET" = "$RUNNING_DEV" ]; then
     cat >&2 <<EOF
 ERROR: $TARGET is the disk the currently-running system is booted from.

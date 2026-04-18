@@ -16,6 +16,7 @@ udev
 btrfs-progs
 e2fsprogs
 parted
+gdisk
 dosfstools
 rsync
 squashfs-tools
