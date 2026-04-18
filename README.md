@@ -6,7 +6,7 @@ A network-level YouTube content filter that analyzes videos using keyword matchi
 
 BrainrotFilter sits between your network clients and YouTube, transparently analyzing video content in real-time. When it detects "brainrot" content (low-quality, attention-grabbing videos), it can block, warn, or monitor based on configurable thresholds.
 
-This is the **Linux/Debian** port of BrainrotFilter (originally built for pfSense/FreeBSD).
+
 
 ## Features
 
