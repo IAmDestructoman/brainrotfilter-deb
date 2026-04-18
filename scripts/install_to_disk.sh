@@ -207,6 +207,15 @@ for d in dev dev/pts proc sys run; do
     mount --rbind "/$d" "$MNT/$d"
 done
 
+# -- Drop casper so the installed system boots from disk, not expecting
+#    a live-mode squashfs. Without this, the installed system hits
+#    /init: "Unable to find a medium containing a live file system".
+chroot "$MNT" env DEBIAN_FRONTEND=noninteractive \
+    apt-get -y purge casper 2>&1 | tail -3 || true
+
+# -- Rebuild initramfs now that casper's hooks are gone --
+chroot "$MNT" update-initramfs -u -k all 2>&1 | tail -3
+
 # -- Install GRUB for both firmware paths --
 echo "Installing GRUB..."
 chroot "$MNT" grub-install --target=x86_64-efi \
