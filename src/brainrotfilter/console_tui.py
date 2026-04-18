@@ -868,6 +868,27 @@ def action_install_to_disk() -> None:
     pause()
 
 
+def action_wipe_disk() -> None:
+    """W) Wipe Disk — escape hatch when a failed install traps the firmware."""
+    clear_screen()
+    print(f"\n{BOLD}  === Wipe Disk ==={RESET}\n")
+    print(f"  {YELLOW}Destroys the partition table on a target disk.{RESET}")
+    print(f"  Use when a previous install left a bootable signature that the")
+    print(f"  firmware keeps picking over the live ISO — wiping makes the")
+    print(f"  firmware fall through to the DVD / USB on next power cycle.\n")
+    print(f"  {RED}The disk's contents become unrecoverable.{RESET}")
+    print(f"  Refuses to wipe the currently-running root or the live medium.\n")
+    if not confirm("Continue?"):
+        return
+    rc = _run_interactive(
+        _sudo(["/usr/lib/brainrotfilter/scripts/wipe_disk.sh"]),
+        timeout=600,
+    )
+    if rc != 0:
+        print(f"\n  {RED}Wipe did not complete (exit {rc}).{RESET}")
+    pause()
+
+
 def action_shell() -> None:
     """8) Shell"""
     clear_screen()
@@ -931,6 +952,7 @@ MENU_ITEMS = [
     ("6", "Update BrainrotFilter", action_update),
     ("7", "Enable/Disable SSH", action_toggle_ssh),
     ("I", "Install to Disk", action_install_to_disk),
+    ("W", "Wipe Disk", action_wipe_disk),
     ("8", "Shell", action_shell),
     ("9", "Reboot / Shutdown", action_reboot_shutdown),
 ]

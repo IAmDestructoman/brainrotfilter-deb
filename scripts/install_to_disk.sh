@@ -22,14 +22,38 @@ die() { echo "${RED}ERROR:${NC} $*" >&2; exit 1; }
 
 [ "$(id -u)" -eq 0 ] || die "must run as root"
 
-# -- Locate the live squashfs source --
+# -- Locate the live squashfs source.
+#    Normal live boot paths first; then fall through to any attached
+#    CD/DVD that holds a valid casper ISO. That means this installer
+#    works even when booted from an already-installed (possibly broken)
+#    disk — as long as the current BrainrotFilter ISO is in the drive,
+#    we can reinstall over the host.
 SQUASHFS=""
 for c in /cdrom/casper/filesystem.squashfs \
          /run/live/medium/casper/filesystem.squashfs \
          /live/image/casper/filesystem.squashfs; do
     if [ -r "$c" ]; then SQUASHFS="$c"; break; fi
 done
-[ -n "$SQUASHFS" ] || die "can't find casper/filesystem.squashfs; is this a live boot?"
+
+SR_MOUNT=""
+if [ -z "$SQUASHFS" ]; then
+    for d in /dev/sr0 /dev/sr1 /dev/cdrom /dev/dvd; do
+        [ -b "$d" ] || continue
+        m=$(mktemp -d /tmp/brainrot-iso-src.XXXXXX)
+        if mount -o ro "$d" "$m" 2>/dev/null; then
+            if [ -r "$m/casper/filesystem.squashfs" ]; then
+                SQUASHFS="$m/casper/filesystem.squashfs"
+                SR_MOUNT="$m"
+                echo "Found ISO source on $d (mounted at $m)"
+                break
+            fi
+            umount "$m" 2>/dev/null || true
+        fi
+        rmdir "$m" 2>/dev/null || true
+    done
+fi
+
+[ -n "$SQUASHFS" ] || die "can't find casper/filesystem.squashfs — attach the BrainrotFilter ISO to the DVD drive and try again"
 
 # -- Determine the boot media's parent device (so we refuse to wipe it) --
 BOOT_DEV=""
@@ -79,6 +103,26 @@ read -rp "Pick target disk number (or 'q' to cancel): " PICK
 [ "$PICK" -ge 1 ] && [ "$PICK" -le ${#CANDIDATES[@]} ] || die "out of range"
 TARGET="${CANDIDATES[$((PICK-1))]}"
 [ "$TARGET" != "$BOOT_DEV" ] || die "refusing to wipe the boot media"
+
+# Also refuse to wipe the currently-running system root (can happen
+# when booted from the installed disk rather than the live ISO).
+RUNNING_ROOT=$(findmnt -no SOURCE / 2>/dev/null | head -1)
+RUNNING_DEV=$(lsblk -no PKNAME "$RUNNING_ROOT" 2>/dev/null | head -1)
+[ -n "$RUNNING_DEV" ] && RUNNING_DEV="/dev/$RUNNING_DEV"
+if [ -n "$RUNNING_DEV" ] && [ "$TARGET" = "$RUNNING_DEV" ]; then
+    cat >&2 <<EOF
+ERROR: $TARGET is the disk the currently-running system is booted from.
+You cannot wipe and reinstall over yourself while it's in use.
+
+Recovery path:
+  1. Run the TUI "Wipe Disk" action to zero the GPT on $TARGET.
+  2. Shut down the appliance.
+  3. Power back on — with no bootable EFI on disk, the BIOS / UEFI
+     firmware will fall through to the DVD with the live ISO and
+     the installer can run cleanly.
+EOF
+    exit 1
+fi
 
 echo
 echo "${RED}${BOLD}>>> ALL DATA ON $TARGET WILL BE ERASED <<<${NC}"
