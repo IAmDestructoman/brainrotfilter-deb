@@ -213,6 +213,18 @@ done
 chroot "$MNT" env DEBIAN_FRONTEND=noninteractive \
     apt-get -y purge casper 2>&1 | tail -3 || true
 
+# -- Force MODULES=most so the initrd carries every available storage /
+#    virt driver (hv_storvsc, virtio_scsi, nvme, ahci, ...). Module
+#    auto-detection during this update-initramfs call runs in the live
+#    chroot where /dev/sda is the loopback for the squashfs, not the
+#    target's real SCSI/NVMe device, so MODULES=dep guesses wrong and
+#    the installed system drops to the initramfs with
+#    "/dev/sdaN does not exist". `most` is a small size premium for a
+#    guaranteed boot on any hardware.
+if [ -f "$MNT/etc/initramfs-tools/initramfs.conf" ]; then
+    sed -i 's/^MODULES=.*/MODULES=most/' "$MNT/etc/initramfs-tools/initramfs.conf"
+fi
+
 # -- Rebuild initramfs now that casper's hooks are gone --
 chroot "$MNT" update-initramfs -u -k all 2>&1 | tail -3
 
