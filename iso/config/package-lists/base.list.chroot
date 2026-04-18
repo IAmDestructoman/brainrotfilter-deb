@@ -20,6 +20,8 @@ gdisk
 dosfstools
 rsync
 squashfs-tools
+zstd
+pv
 
 # Needed by the "Install to Disk" TUI action (writes GPT + installs
 # grub for both BIOS and UEFI boot on the target disk).
