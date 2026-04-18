@@ -892,11 +892,27 @@ def action_reboot_shutdown() -> None:
     if choice == "1":
         if confirm("Reboot now?"):
             print("  Rebooting...")
-            _run(["systemctl", "reboot"], sudo=True)
+            r = _run(["systemctl", "reboot"], sudo=True)
+            if r.returncode != 0:
+                print(f"  {RED}systemctl reboot failed (exit {r.returncode}): "
+                      f"{r.stderr.strip() or r.stdout.strip()}{RESET}")
+                print("  Falling back to /sbin/reboot...")
+                r2 = _run(["/sbin/reboot"], sudo=True)
+                if r2.returncode != 0:
+                    print(f"  {RED}Fallback failed too: {r2.stderr.strip()}{RESET}")
+                    pause()
     elif choice == "2":
         if confirm("Shut down now?"):
             print("  Shutting down...")
-            _run(["systemctl", "poweroff"], sudo=True)
+            r = _run(["systemctl", "poweroff"], sudo=True)
+            if r.returncode != 0:
+                print(f"  {RED}systemctl poweroff failed (exit {r.returncode}): "
+                      f"{r.stderr.strip() or r.stdout.strip()}{RESET}")
+                print("  Falling back to /sbin/poweroff...")
+                r2 = _run(["/sbin/poweroff"], sudo=True)
+                if r2.returncode != 0:
+                    print(f"  {RED}Fallback failed too: {r2.stderr.strip()}{RESET}")
+                    pause()
     else:
         return
 
