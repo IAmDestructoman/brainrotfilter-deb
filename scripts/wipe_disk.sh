@@ -23,10 +23,17 @@ echo "when a failed install has trapped the VM / appliance into booting"
 echo "a broken system instead of falling through to the DVD."
 echo
 
-# Find the currently-running root so we refuse to wipe it.
-RUNNING_ROOT=$(findmnt -no SOURCE / 2>/dev/null | head -1)
-RUNNING_DEV=$(lsblk -no PKNAME "$RUNNING_ROOT" 2>/dev/null | head -1)
-[ -n "$RUNNING_DEV" ] && RUNNING_DEV="/dev/$RUNNING_DEV"
+# Find the currently-running root so we refuse to wipe it. Live boots
+# have overlay on /, so RUNNING_ROOT may be empty — that's fine, nothing
+# to exclude. Tests run inside `if` so set -e doesn't trip on false.
+RUNNING_DEV=""
+RUNNING_ROOT=$(findmnt -no SOURCE / 2>/dev/null | head -1 || true)
+if [ -n "$RUNNING_ROOT" ] && [ -b "$RUNNING_ROOT" ]; then
+    pk=$(lsblk -no PKNAME "$RUNNING_ROOT" 2>/dev/null | head -1 || true)
+    if [ -n "$pk" ]; then
+        RUNNING_DEV="/dev/$pk"
+    fi
+fi
 
 # Find the live-boot medium so we refuse to wipe it too.
 BOOT_DEV=""
@@ -48,8 +55,11 @@ i=0
 for line in "${DISK_LINES[@]}"; do
     dev=$(awk '{print $1}' <<<"$line")
     skip=""
-    [ "$dev" = "$BOOT_DEV"   ] && skip="LIVE MEDIUM"
-    [ "$dev" = "$RUNNING_DEV" ] && skip="RUNNING ROOT"
+    if [ -n "$BOOT_DEV" ] && [ "$dev" = "$BOOT_DEV" ]; then
+        skip="LIVE MEDIUM"
+    elif [ -n "$RUNNING_DEV" ] && [ "$dev" = "$RUNNING_DEV" ]; then
+        skip="RUNNING ROOT"
+    fi
     if [ -n "$skip" ]; then
         printf '     %s  [%s - skipped]\n' "$line" "$skip"
         continue
@@ -67,9 +77,13 @@ if [ ${#CANDIDATES[@]} -eq 0 ]; then
 fi
 
 read -rp "Pick disk to wipe (or 'q' to cancel): " PICK
-[ "$PICK" = "q" ] || [ -z "$PICK" ] && { echo "Cancelled."; exit 0; }
+if [ -z "$PICK" ] || [ "$PICK" = "q" ] || [ "$PICK" = "Q" ]; then
+    echo "Cancelled."; exit 0
+fi
 [[ "$PICK" =~ ^[0-9]+$ ]] || die "not a number"
-[ "$PICK" -ge 1 ] && [ "$PICK" -le ${#CANDIDATES[@]} ] || die "out of range"
+if [ "$PICK" -lt 1 ] || [ "$PICK" -gt "${#CANDIDATES[@]}" ]; then
+    die "out of range"
+fi
 TARGET="${CANDIDATES[$((PICK-1))]}"
 
 echo
