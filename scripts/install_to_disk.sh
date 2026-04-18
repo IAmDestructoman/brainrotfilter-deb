@@ -229,14 +229,38 @@ fi
 chroot "$MNT" update-initramfs -u -k all 2>&1 | tail -3
 
 # -- Install GRUB for both firmware paths --
+#
+# UEFI: use --removable so grub writes to /EFI/BOOT/BOOTX64.EFI (the
+# firmware fallback path) and --no-nvram so we DON'T touch the EFI
+# BootOrder variable. That way:
+#   * A booted live ISO / PXE / any other NVRAM entry keeps its
+#     normal priority — you can always boot the live ISO for rescue
+#     or reinstall without detaching the disk or deleting NVRAM
+#     entries.
+#   * When no removable media is present, firmware falls through to
+#     the default /EFI/BOOT/BOOTX64.EFI on disk and the installed
+#     system boots.
+#
+# BIOS: unchanged — i386-pc writes to the BIOS Boot Partition on the
+# disk, no NVRAM involved.
 echo "Installing GRUB..."
 chroot "$MNT" grub-install --target=x86_64-efi \
     --efi-directory=/boot/efi \
-    --bootloader-id=BrainrotFilter \
+    --removable --no-nvram \
     --recheck --no-floppy 2>&1 | tail -3 || true
 chroot "$MNT" grub-install --target=i386-pc \
     --recheck --no-floppy "$TARGET" 2>&1 | tail -3 || true
 chroot "$MNT" update-grub 2>&1 | tail -3
+
+# -- Best-effort: delete any stale "BrainrotFilter" NVRAM entry left
+#    over from earlier builds that used --bootloader-id. Harmless on
+#    fresh hardware (efibootmgr prints "no match" and exits non-zero).
+if chroot "$MNT" command -v efibootmgr >/dev/null 2>&1; then
+    while read -r line; do
+        num=$(echo "$line" | awk '{print $1}' | sed 's/^Boot//;s/\*$//')
+        [ -n "$num" ] && chroot "$MNT" efibootmgr -b "$num" -B >/dev/null 2>&1 || true
+    done < <(chroot "$MNT" efibootmgr 2>/dev/null | grep -E '^Boot[0-9A-F]{4}\*?\s+BrainrotFilter')
+fi
 
 # -- Installed system doesn't need the live-only firstboot netplan --
 chroot "$MNT" rm -f /etc/netplan/00-brainrot-firstboot.yaml
