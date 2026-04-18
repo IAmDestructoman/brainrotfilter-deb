@@ -306,6 +306,37 @@ if chroot "$MNT" command -v efibootmgr >/dev/null 2>&1; then
     done < <(chroot "$MNT" efibootmgr 2>/dev/null | grep -E '^Boot[0-9A-F]{4}\*?\s+BrainrotFilter')
 fi
 
+# -- Make sure firmware's BootOrder keeps removable media (DVD / USB)
+#    ahead of the disk. On Hyper-V Gen2 specifically, the VM's GUI-level
+#    boot-order list is NOT reflected into the EFI BootOrder variable —
+#    firmware silently tries the disk first even when the user set DVD
+#    first in Hyper-V Manager. Force the order here so future reinstalls
+#    "just work" by re-attaching the ISO and rebooting, no PowerShell or
+#    detaching disks required.
+if command -v efibootmgr >/dev/null 2>&1 && [ -d /sys/firmware/efi/efivars ]; then
+    # Grab current entries, classify each as removable / disk / net.
+    removable=""; disk=""; net=""
+    while read -r line; do
+        num=$(echo "$line" | sed -E 's/^Boot([0-9A-F]{4})\*?.*$/\1/')
+        [ -n "$num" ] || continue
+        case "$line" in
+            *CDROM*|*ISO*|*DVD*|*"SCSI(0,0)"*)  removable="${removable:+$removable,}$num" ;;
+            *Network*|*IPv4*|*PXE*|*MAC*)       net="${net:+$net,}$num" ;;
+            *)                                   disk="${disk:+$disk,}$num" ;;
+        esac
+    done < <(efibootmgr 2>/dev/null | grep -E '^Boot[0-9A-F]{4}')
+    # Heuristic: on Hyper-V the DVD is typically SCSI(0,0); our install
+    # target is typically SCSI(0,1)+. When unsure, the "removable"
+    # bucket pulls the DVD, "disk" pulls the target.
+    new_order=""
+    for g in "$removable" "$disk" "$net"; do
+        [ -n "$g" ] && new_order="${new_order:+$new_order,}$g"
+    done
+    if [ -n "$new_order" ]; then
+        efibootmgr -o "$new_order" >/dev/null 2>&1 || true
+    fi
+fi
+
 # -- Installed system doesn't need the live-only firstboot netplan --
 chroot "$MNT" rm -f /etc/netplan/00-brainrot-firstboot.yaml
 
