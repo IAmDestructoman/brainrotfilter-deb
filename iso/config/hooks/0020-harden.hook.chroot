@@ -207,6 +207,12 @@ cat > /etc/sudoers.d/50-brainrotfilter-appliance <<'EOF'
 # Allow the appliance console user to run any command as root without a
 # password. Scoped to physical-console-only: SSH logins (when enabled via
 # the TUI) land as a different user and still require the normal sudo rules.
+#
+# !use_pty: the TUI runs as the appliance user's login shell on tty1 and
+# invokes sudo without a pts allocated. Ubuntu's default `Defaults use_pty`
+# makes sudo try to allocate one and fail with "unable to allocate pty:
+# No such device" — which breaks reboot/shutdown among other things.
+Defaults:appliance !use_pty
 appliance ALL=(ALL) NOPASSWD: ALL
 EOF
 chmod 0440 /etc/sudoers.d/50-brainrotfilter-appliance
