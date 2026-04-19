@@ -36,11 +36,32 @@ BANNER
             bash --login
             ;;
         4)
-            sudo -n systemctl reboot
+            echo "  Rebooting..."
+            # Flush pending writes, drop caches, sync — then try
+            # progressively more forceful reboot paths. On Hyper-V
+            # after a half-install the normal systemctl reboot
+            # sometimes hangs because services are in bad states.
+            sudo -n sync 2>/dev/null
+            sudo -n systemctl reboot 2>/dev/null
+            sleep 5
+            sudo -n systemctl reboot --force 2>/dev/null
+            sleep 5
+            sudo -n reboot -f 2>/dev/null
+            sleep 5
+            # Last resort: direct sysrq trigger.
+            sudo -n bash -c 'echo b > /proc/sysrq-trigger' 2>/dev/null
             sleep 10
             ;;
         5)
-            sudo -n systemctl poweroff
+            echo "  Shutting down..."
+            sudo -n sync 2>/dev/null
+            sudo -n systemctl poweroff 2>/dev/null
+            sleep 5
+            sudo -n systemctl poweroff --force 2>/dev/null
+            sleep 5
+            sudo -n poweroff -f 2>/dev/null
+            sleep 5
+            sudo -n bash -c 'echo o > /proc/sysrq-trigger' 2>/dev/null
             sleep 10
             ;;
         *)

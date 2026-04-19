@@ -17,6 +17,12 @@ die() { echo "${RED}ERROR:${NC} $*" >&2; exit 1; }
 
 [ "$(id -u)" -eq 0 ] || die "must run as root"
 
+# ENABLE_UEFI: must match iso/build_golden_image.sh. When "false" we
+# skip the EFI BootOrder rewrite since the golden image doesn't have
+# an ESP or BOOTX64.EFI in the first place — the target boots via
+# legacy BIOS from the MBR / BIOS Boot Partition.
+ENABLE_UEFI="${ENABLE_UEFI:-false}"
+
 # -- Locate the golden image. Live boot mounts the ISO at /cdrom; if
 #    we're instead booted from a previous install, check /dev/sr0.
 GOLDEN=""
@@ -216,7 +222,7 @@ rmdir "$MNT" 2>/dev/null || true
 #    disk. On Hyper-V Gen2 the VM-GUI boot-order list is advisory; the
 #    real BootOrder NVRAM variable can put the disk first by default
 #    and trap the firmware there, defeating later reinstalls.
-if command -v efibootmgr >/dev/null 2>&1 && [ -d /sys/firmware/efi/efivars ]; then
+if [ "$ENABLE_UEFI" = "true" ] && command -v efibootmgr >/dev/null 2>&1 && [ -d /sys/firmware/efi/efivars ]; then
     removable=""; disk_boot=""; net=""
     while read -r line; do
         num=$(echo "$line" | sed -E 's/^Boot([0-9A-F]{4})\*?.*$/\1/')

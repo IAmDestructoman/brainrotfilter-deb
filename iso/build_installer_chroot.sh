@@ -145,6 +145,11 @@ EOF
 chmod 600 "$OUT/etc/netplan/00-brainrot-firstboot.yaml"
 chroot "$OUT" systemctl enable systemd-networkd.service 2>/dev/null || true
 
+# --- Enable sysrq so the installer menu's force-reboot fallbacks
+#     (echo b > /proc/sysrq-trigger) actually work ---
+mkdir -p "$OUT/etc/sysctl.d"
+echo "kernel.sysrq = 1" > "$OUT/etc/sysctl.d/99-brainrot-sysrq.conf"
+
 # --- MODULES=most so initramfs carries every storage driver ---
 if [ -f "$OUT/etc/initramfs-tools/initramfs.conf" ]; then
     sed -i 's/^MODULES=.*/MODULES=most/' "$OUT/etc/initramfs-tools/initramfs.conf"
