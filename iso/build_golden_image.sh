@@ -88,6 +88,17 @@ FSTAB
 chroot "$MNT" env DEBIAN_FRONTEND=noninteractive \
     apt-get -y purge casper 2>&1 | tail -3 || true
 
+# Casper leaves a "(live)" PS1 marker in /etc/bash.bashrc (and skel)
+# that survives a plain purge — remove any trace so an installed
+# appliance never displays (live)@... at a shell prompt.
+for f in "$MNT/etc/bash.bashrc" "$MNT/etc/skel/.bashrc" "$MNT/root/.bashrc"; do
+    if [ -f "$f" ]; then
+        sed -i '/(live)/d' "$f" 2>/dev/null || true
+    fi
+done
+# And any leftover casper scripts in profile.d.
+rm -f "$MNT"/etc/profile.d/*casper* "$MNT"/etc/profile.d/*live-installer* 2>/dev/null || true
+
 # MODULES=most — initramfs carries every available storage driver
 # so the image boots on any hardware (Hyper-V, KVM, bare metal, ...).
 if [ -f "$MNT/etc/initramfs-tools/initramfs.conf" ]; then

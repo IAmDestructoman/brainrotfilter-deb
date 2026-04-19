@@ -67,8 +67,14 @@ rm -rf "$OUT/usr/share/doc"/* "$OUT/usr/share/man"/*
 find "$OUT/usr/share/locale" -maxdepth 1 -mindepth 1 -type d \
     ! -name 'en*' -exec rm -rf {} + 2>/dev/null || true
 
-# --- Create appliance user; TUI is its shell ---
-chroot "$OUT" useradd -m -s /usr/lib/brainrotfilter/tui/console_tui.py appliance || true
+# --- Drop the installer entry script. This IS the live UI. ---
+mkdir -p "$OUT/usr/lib/brainrotfilter/tui"
+cp /mnt/e/Code/brainrotfilter-deb/iso/installer_entry.sh \
+   "$OUT/usr/lib/brainrotfilter/tui/installer_entry.sh"
+chmod +x "$OUT/usr/lib/brainrotfilter/tui/installer_entry.sh"
+
+# --- Create appliance user; installer entry is its shell ---
+chroot "$OUT" useradd -m -s /usr/lib/brainrotfilter/tui/installer_entry.sh appliance || true
 chroot "$OUT" passwd -d appliance || true
 chroot "$OUT" usermod -aG sudo appliance
 
@@ -88,16 +94,21 @@ ExecStart=
 ExecStart=-/sbin/agetty -o '-p -- appliance' --noclear --autologin appliance %I $TERM
 EOF
 
-# --- Drop our TUI + installer scripts into the chroot ---
-mkdir -p "$OUT/usr/lib/brainrotfilter/tui" "$OUT/usr/lib/brainrotfilter/scripts"
-cp /mnt/e/Code/brainrotfilter-deb/src/brainrotfilter/console_tui.py \
-   "$OUT/usr/lib/brainrotfilter/tui/console_tui.py"
-chmod +x "$OUT/usr/lib/brainrotfilter/tui/console_tui.py"
-
+# --- Drop the installer scripts ---
+mkdir -p "$OUT/usr/lib/brainrotfilter/scripts"
 for s in install_to_disk.sh wipe_disk.sh; do
     cp "/mnt/e/Code/brainrotfilter-deb/scripts/$s" \
        "$OUT/usr/lib/brainrotfilter/scripts/$s"
     chmod +x "$OUT/usr/lib/brainrotfilter/scripts/$s"
+done
+
+# --- Scrub any "(live)" PS1 markers from bashrc so they can't leak
+#     anywhere. Purely cosmetic, but the installer environment has no
+#     reason to brand itself as live. ---
+for f in "$OUT/etc/bash.bashrc" "$OUT/etc/skel/.bashrc" "$OUT/root/.bashrc"; do
+    if [ -f "$f" ]; then
+        sed -i '/(live)/d;/\\\\$\\$ /{s/(live)//g}' "$f" 2>/dev/null || true
+    fi
 done
 
 # --- Hostname + basic host files ---
