@@ -73,6 +73,15 @@ cp /mnt/e/Code/brainrotfilter-deb/iso/installer_entry.sh \
    "$OUT/usr/lib/brainrotfilter/tui/installer_entry.sh"
 chmod +x "$OUT/usr/lib/brainrotfilter/tui/installer_entry.sh"
 
+# --- Register the installer entry as a valid login shell. PAM's
+#     pam_shells.so blocks autologin if the user's shell isn't listed
+#     in /etc/shells — observed as tty1 flashing cursor on the
+#     installed system. Same fix lives in the harden hook for the
+#     main chroot's console_tui / debug_console shells.
+if ! grep -qxF /usr/lib/brainrotfilter/tui/installer_entry.sh "$OUT/etc/shells" 2>/dev/null; then
+    echo /usr/lib/brainrotfilter/tui/installer_entry.sh >> "$OUT/etc/shells"
+fi
+
 # --- Create appliance user; installer entry is its shell ---
 chroot "$OUT" useradd -m -s /usr/lib/brainrotfilter/tui/installer_entry.sh appliance || true
 chroot "$OUT" passwd -d appliance || true

@@ -144,6 +144,18 @@ exec journalctl -f \
 EOF
 chmod 755 /usr/lib/brainrotfilter/tui/debug_console.sh
 
+# Register our TUI scripts as valid login shells. PAM's pam_shells.so
+# rejects logins (including agetty --autologin) when the target user's
+# shell isn't listed in /etc/shells — observed as tty1 flashing cursor
+# (appliance autologin rejected, getty respawns in a tight loop) and
+# tty2 falling back to a login prompt. Append, don't replace.
+for sh in /usr/lib/brainrotfilter/tui/console_tui.py \
+          /usr/lib/brainrotfilter/tui/debug_console.sh; do
+    if ! grep -qxF "$sh" /etc/shells 2>/dev/null; then
+        echo "$sh" >> /etc/shells
+    fi
+done
+
 # Dedicated read-only user whose shell tails the appliance journals.
 if ! getent passwd brainrot-log >/dev/null; then
     useradd -m -s /usr/lib/brainrotfilter/tui/debug_console.sh -G systemd-journal brainrot-log

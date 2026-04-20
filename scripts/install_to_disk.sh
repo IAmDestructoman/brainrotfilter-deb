@@ -126,6 +126,31 @@ echo
 read -rp "Type ${BOLD}YES${NC} (all caps) to proceed: " CONFIRM
 [ "$CONFIRM" = "YES" ] || { echo "Cancelled."; exit 0; }
 
+# -- Root password prompt. Required: the installed system boots with
+#    root locked otherwise, and with no TUI path to set one if the
+#    console_tui ever fails, the operator has no way in. Ask once here,
+#    blow up on mismatch or empty.
+echo
+echo "${BOLD}Set a root password for the installed system${NC}"
+echo "(used for SSH login and tty2 rescue console)"
+while :; do
+    stty -echo 2>/dev/null
+    read -rp "  Root password: " PW1; echo
+    read -rp "  Confirm:       " PW2; echo
+    stty echo 2>/dev/null
+    if [ -z "$PW1" ]; then
+        echo "  ${RED}empty — try again${NC}"
+        continue
+    fi
+    if [ "$PW1" != "$PW2" ]; then
+        echo "  ${RED}mismatch — try again${NC}"
+        continue
+    fi
+    break
+done
+ROOT_PW="$PW1"
+unset PW1 PW2
+
 # Unmount / swapoff anything still mounted on the target.
 echo "Preparing target..."
 for p in $(lsblk -pnlo NAME "$TARGET" | tail -n +2); do
@@ -213,9 +238,24 @@ if mount "$P_ROOT" "$MNT" 2>/dev/null; then
     # Wipe host keys so each installed box regenerates unique ones on
     # first SSH-enable.
     rm -f "$MNT"/etc/ssh/ssh_host_*_key "$MNT"/etc/ssh/ssh_host_*_key.pub 2>/dev/null || true
+
+    # Apply the root password chosen earlier. chroot into target so
+    # chpasswd writes to the TARGET's /etc/shadow, not the live's.
+    mount --bind /dev "$MNT/dev" 2>/dev/null || true
+    mount -t proc proc "$MNT/proc" 2>/dev/null || true
+    echo "root:$ROOT_PW" | chroot "$MNT" chpasswd 2>/dev/null || true
+    # Also unmask + enable SSH so the box is reachable on first boot.
+    chroot "$MNT" systemctl unmask ssh.service ssh.socket 2>/dev/null || true
+    chroot "$MNT" systemctl enable ssh.service ssh.socket 2>/dev/null || true
+    # Generate fresh SSH host keys so sshd starts on first boot.
+    chroot "$MNT" ssh-keygen -A 2>/dev/null || true
+    umount "$MNT/proc" 2>/dev/null || true
+    umount "$MNT/dev" 2>/dev/null || true
+
     sync
     umount "$MNT"
 fi
+unset ROOT_PW
 rmdir "$MNT" 2>/dev/null || true
 
 # -- Ensure firmware's BootOrder keeps removable media ahead of the
